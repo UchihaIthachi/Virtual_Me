@@ -1,7 +1,7 @@
 import { useAnimations, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { button, useControls } from 'leva'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import * as THREE from 'three'
 import { useChat } from '../hooks/useChat'
@@ -21,14 +21,14 @@ const facialExpressions = {
     mouthLeft: 0.3,
   },
   laugh: {
-    jawOpen: 0.32,
-    mouthSmileLeft: 1,
-    mouthSmileRight: 1,
-    eyeSquintLeft: 0.75,
-    eyeSquintRight: 0.75,
-    cheekSquintLeft: 0.8,
-    cheekSquintRight: 0.8,
-    browInnerUp: 0.2,
+    jawOpen: 0.18,
+    mouthSmileLeft: 0.75,
+    mouthSmileRight: 0.75,
+    eyeSquintLeft: 0.45,
+    eyeSquintRight: 0.45,
+    cheekSquintLeft: 0.55,
+    cheekSquintRight: 0.55,
+    browInnerUp: 0.15
   },
   confident: {
     mouthSmileLeft: 0.45,
@@ -87,36 +87,34 @@ const facialExpressions = {
     mouthPressRight: 0.41000000000000003,
   },
   funnyFace: {
-    jawLeft: 0.63,
-    mouthPucker: 0.53,
-    noseSneerLeft: 1,
-    noseSneerRight: 0.39,
-    mouthLeft: 1,
-    eyeLookUpLeft: 1,
-    eyeLookUpRight: 1,
-    cheekPuff: 0.9999924982764238,
-    mouthDimpleLeft: 0.414743888682652,
-    mouthRollLower: 0.32,
-    mouthSmileLeft: 0.35499733688813034,
-    mouthSmileRight: 0.35499733688813034,
+    jawLeft: 0.35,
+    mouthPucker: 0.35,
+    noseSneerLeft: 0.45,
+    mouthLeft: 0.5,
+    eyeLookUpLeft: 0.45,
+    eyeLookUpRight: 0.45,
+    cheekPuff: 0.45,
+    mouthSmileLeft: 0.3,
+    mouthSmileRight: 0.3
   },
   sad: {
-    mouthFrownLeft: 1,
-    mouthFrownRight: 1,
-    mouthShrugLower: 0.78341,
-    browInnerUp: 0.452,
-    eyeSquintLeft: 0.72,
-    eyeSquintRight: 0.75,
-    eyeLookDownLeft: 0.5,
-    eyeLookDownRight: 0.5,
-    jawForward: 1,
+    mouthFrownLeft: 0.6,
+    mouthFrownRight: 0.6,
+    mouthShrugLower: 0.4,
+    browInnerUp: 0.5,
+    eyeSquintLeft: 0.3,
+    eyeSquintRight: 0.3,
+    eyeLookDownLeft: 0.35,
+    eyeLookDownRight: 0.35
   },
   surprised: {
-    eyeWideLeft: 0.5,
-    eyeWideRight: 0.5,
-    jawOpen: 0.351,
-    mouthFunnel: 1,
-    browInnerUp: 1,
+    eyeWideLeft: 0.4,
+    eyeWideRight: 0.4,
+    browInnerUp: 0.65,
+    browOuterUpLeft: 0.45,
+    browOuterUpRight: 0.45,
+    jawOpen: 0.16,
+    mouthFunnel: 0.25
   },
   angry: {
     browDownLeft: 1,
@@ -160,10 +158,16 @@ const facialExpressions = {
 // Draco decoder served from this site (no third-party CDN at runtime)
 const DRACO = '/draco/'
 
+// a warm resting face between replies
+const REST = { mouthSmileLeft: 0.12, mouthSmileRight: 0.12 }
+// morphs around the mouth that would fight the lip sync
+const MOUTH = /^(mouth|jaw|cheekPuff|tongue)/
+
 let setupMode = false
 
 export function Avatar(props) {
   const { nodes, materials, scene } = useGLTF('/models/me.glb', DRACO)
+  const MORPH_KEYS = useMemo(() => Object.keys(nodes.EyeLeft.morphTargetDictionary).concat(Object.keys(nodes.Wolf3D_Head.morphTargetDictionary)).filter((k, i, a) => a.indexOf(k) === i), [nodes])
 
   const { message, loading, poke } = useChat()
   const look = useRef({ x: 0, y: 0 })
@@ -222,39 +226,40 @@ export function Avatar(props) {
     return () => actions[animation].fadeOut(0.5)
   }, [animation])
 
-  const lerpMorphTarget = (target, value, speed = 0.1) => {
-    scene.traverse((child) => {
-      if (child.isSkinnedMesh && child.morphTargetDictionary) {
-        const index = child.morphTargetDictionary[target]
-        if (
-          index === undefined ||
-          child.morphTargetInfluences[index] === undefined
-        ) {
-          return
-        }
-        child.morphTargetInfluences[index] = THREE.MathUtils.lerp(
-          child.morphTargetInfluences[index],
-          value,
-          speed
-        )
-
-        if (!setupMode) {
-          try {
-            set({
-              [target]: value,
-            })
-          } catch (e) {}
-        }
-      }
-    })
-  }
-
   const [blink, setBlink] = useState(false)
   const [winkLeft, setWinkLeft] = useState(false)
   const [winkRight, setWinkRight] = useState(false)
   const [facialExpression, setFacialExpression] = useState('')
 
-  useFrame((state) => {
+  // every mesh with morph targets, found once (not on every frame)
+  const morphMeshes = useMemo(() => {
+    const list = []
+    scene.traverse((child) => {
+      if (child.isSkinnedMesh && child.morphTargetDictionary) list.push(child)
+    })
+    return list
+  }, [scene])
+
+  // used by the (hidden) setup panel only
+  const lerpMorphTarget = (target, value, speed = 0.1) => {
+    morphMeshes.forEach((child) => {
+      const index = child.morphTargetDictionary[target]
+      if (index === undefined) return
+      child.morphTargetInfluences[index] = THREE.MathUtils.lerp(child.morphTargetInfluences[index], value, speed)
+    })
+  }
+
+  // ease one morph toward its target, at the same speed on any frame rate
+  const dampMorph = (key, target, lambda, delta) => {
+    for (const child of morphMeshes) {
+      const index = child.morphTargetDictionary[key]
+      if (index === undefined) continue
+      const cur = child.morphTargetInfluences[index]
+      child.morphTargetInfluences[index] = THREE.MathUtils.damp(cur, target, lambda, delta)
+    }
+  }
+
+  useFrame((state, delta) => {
     // head (and a little of the neck) turns toward the cursor, on top of the animation
     if (!setupMode && nodes.Head) {
       const tx = THREE.MathUtils.clamp(state.pointer.x, -1, 1) * 0.45
@@ -280,34 +285,28 @@ export function Avatar(props) {
       talkSway(nodes, state.clock.elapsedTime, talk.current)
     }
 
-    !setupMode &&
-      Object.keys(nodes.EyeLeft.morphTargetDictionary).forEach(
-        (key) => {
-          const mapping = facialExpressions[facialExpression]
-          if (key === 'eyeBlinkLeft' || key === 'eyeBlinkRight') {
-            return // eyes wink/blink are handled separately
-          }
-          if (mapping && mapping[key]) {
-            lerpMorphTarget(key, mapping[key], 0.1)
-          } else {
-            lerpMorphTarget(key, 0, 0.1)
-          }
-        }
-      )
+    if (setupMode) return
 
-    lerpMorphTarget('eyeBlinkLeft', blink || winkLeft ? 1 : 0, 0.5)
-    lerpMorphTarget('eyeBlinkRight', blink || winkRight ? 1 : 0, 0.5)
-
-    // LIPSYNC
-    if (setupMode) {
-      return
+    // One pass over all morph targets: expression + lip sync + blinks, each
+    // eased toward its target so faces blend instead of snapping.
+    const dt = Math.min(delta, 0.05)
+    const speaking = isSpeaking()
+    const mapping = facialExpressions[facialExpression] || REST
+    const viseme = currentViseme()
+    for (const key of MORPH_KEYS) {
+      if (key === 'eyeBlinkLeft' || key === 'eyeBlinkRight') continue
+      if (key.startsWith('viseme_')) {
+        // lips: the current mouth shape at 70%, the rest relax
+        dampMorph(key, key === viseme ? 0.7 : 0, key === viseme ? 22 : 14, dt)
+        continue
+      }
+      let target = mapping[key] || 0
+      // while talking, the lips belong to the voice: soften the expression's mouth
+      if (speaking && MOUTH.test(key)) target *= 0.35
+      dampMorph(key, target, 5, dt)
     }
-
-    // lips follow the voice: open the current viseme, relax the others
-    const now = currentViseme()
-    VISEMES.forEach((v) => {
-      lerpMorphTarget(v, v === now ? 1 : 0, v === now ? 0.35 : 0.18)
-    })
+    dampMorph('eyeBlinkLeft', blink || winkLeft ? 1 : 0, 28, dt)
+    dampMorph('eyeBlinkRight', blink || winkRight ? 1 : 0, 28, dt)
   })
 
   useControls('FacialExpressions', {
