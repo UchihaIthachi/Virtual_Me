@@ -11,6 +11,9 @@
 1. Netlify → Add new site → import this repo (settings come from `netlify.toml`).
 2. Optional env vars: `RAG_URL` (default `https://harshanalf.netlify.app`), `CHAT_PARTNER_TOKEN` (same value on the portfolio site, so its rate limit counts each visitor separately).
 
+### Docs
+- [Roadmap](docs/ROADMAP.md) · [What we learned](docs/LEARNINGS.md) · [Research notes](docs/research/)
+
 ### Local
 `cd Frontend && npx netlify dev` (runs the site and `/api/ask` together).
 
