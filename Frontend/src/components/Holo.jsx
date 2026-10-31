@@ -2,10 +2,11 @@
 // and a FIX session terminal (sample, made-up messages). Drawn on canvases,
 // so there are no extra assets to download.
 import { Float } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useChat } from '../hooks/useChat'
+import { LOGOS } from '../lib/logos'
 
 // older Safari has no roundRect
 if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
@@ -163,44 +164,60 @@ function TerminalPanel(props) {
   )
 }
 
-/** Small floating tech badges (Java, Kafka, Go, K8s) orbiting slowly. */
+/** Floating tech logos (Java, Kafka, Go, K8s…) orbiting slowly above the avatar. */
+const lum = (hex) => {
+  const n = parseInt(hex.slice(1), 16)
+  return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255
+}
 function Badges() {
   const group = useRef()
-  const labels = ['Java', 'Kafka', 'Go', 'K8s', 'FIX', 'gRPC']
-  const tex = useMemo(
-    () =>
-      labels.map((l) => {
-        const c = document.createElement('canvas')
-        c.width = 192
-        c.height = 72
-        const x = c.getContext('2d')
-        x.fillStyle = 'rgba(255,255,255,0.08)'
-        x.strokeStyle = 'rgba(165,243,252,0.6)'
-        x.lineWidth = 2
-        x.beginPath()
-        x.roundRect(3, 3, 186, 66, 33)
-        x.fill()
-        x.stroke()
-        x.font = '700 30px Inter, system-ui, sans-serif'
+  const tex = useMemo(() => {
+    const items = [...LOGOS, { name: 'FIX', text: 'FIX' }]
+    return items.map((it) => {
+      const c = document.createElement('canvas')
+      c.width = c.height = 128
+      const x = c.getContext('2d')
+      // round glass tile
+      const g = x.createLinearGradient(0, 0, 0, 128)
+      g.addColorStop(0, 'rgba(255,255,255,0.16)')
+      g.addColorStop(1, 'rgba(255,255,255,0.05)')
+      x.fillStyle = g
+      x.beginPath()
+      x.roundRect(4, 4, 120, 120, 32)
+      x.fill()
+      x.strokeStyle = 'rgba(165,243,252,0.55)'
+      x.lineWidth = 2.5
+      x.stroke()
+      if (it.path) {
+        // logo in its brand colour; very dark brands (e.g. Kafka) drawn white so they show on the dark scene
+        x.save()
+        x.translate(28, 28)
+        x.scale(3, 3)
+        x.fillStyle = lum(it.hex) < 0.25 ? '#f1f5f9' : it.hex
+        x.fill(new Path2D(it.path))
+        x.restore()
+      } else {
+        x.font = '800 40px Inter, system-ui, sans-serif'
         x.fillStyle = '#e2e8f0'
         x.textAlign = 'center'
-        x.fillText(l, 96, 47)
-        const t = new THREE.CanvasTexture(c)
-        t.colorSpace = THREE.SRGBColorSpace
-        return t
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  )
+        x.textBaseline = 'middle'
+        x.fillText(it.text, 64, 66)
+      }
+      const t = new THREE.CanvasTexture(c)
+      t.colorSpace = THREE.SRGBColorSpace
+      t.anisotropy = 4
+      return { t, name: it.name }
+    })
+  }, [])
   useFrame((s, dt) => {
     if (group.current) group.current.rotation.y += dt * 0.15
   })
   return (
-    <group ref={group} position={[0, 2.08, -0.85]}>
-      {tex.map((t, k) => {
+    <group ref={group} position={[0, 1.98, -1.5]}>
+      {tex.map(({ t, name }, k) => {
         const a = (k / tex.length) * Math.PI * 2
         return (
-          <sprite key={k} position={[Math.cos(a) * 0.95, Math.sin(k * 1.7) * 0.1, Math.sin(a) * 0.3]} scale={[0.16, 0.06, 1]}>
+          <sprite key={name} position={[Math.cos(a) * 1.1, Math.sin(k * 1.7) * 0.1, Math.sin(a) * 0.35]} scale={[0.13, 0.13, 1]}>
             <spriteMaterial map={t} transparent toneMapped={false} />
           </sprite>
         )
@@ -210,15 +227,26 @@ function Badges() {
 }
 
 export function Holo() {
+  // screens only where there's room beside the avatar; badges stay out of close-ups
+  const aspect = useThree((st) => st.size.width / st.size.height)
+  const tall = useThree((st) => st.size.height >= 560)
+  const { view } = useChat()
+  const wide = aspect >= 1.15 && tall // not on portrait phones or landscape phones
+  // keep both screens inside the frame: closer to the avatar on narrower screens
+  const panelX = Math.min(1.1, Math.max(0.72, 0.55 * aspect - 0.05))
   return (
     <>
-      <Float speed={1.4} rotationIntensity={0.15} floatIntensity={0.35}>
-        <ChartPanel position={[-1.0, 1.5, -0.85]} rotation={[0, 0.45, 0]} />
-      </Float>
-      <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.35}>
-        <TerminalPanel position={[1.0, 1.5, -0.85]} rotation={[0, -0.45, 0]} />
-      </Float>
-      <Badges />
+      {wide && (
+        <>
+          <Float speed={1.4} rotationIntensity={0.15} floatIntensity={0.35}>
+            <ChartPanel position={[-panelX, 1.52, -1.3]} rotation={[0, 0.45, 0]} />
+          </Float>
+          <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.35}>
+            <TerminalPanel position={[panelX, 1.52, -1.3]} rotation={[0, -0.45, 0]} />
+          </Float>
+        </>
+      )}
+      {view !== 'face' && <Badges />}
     </>
   )
 }
