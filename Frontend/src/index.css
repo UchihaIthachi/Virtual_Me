@@ -14,6 +14,27 @@
 
 body {
   margin: 0;
-  background-color: #ffffff00;
-  background-image: linear-gradient(19deg, #040404 0%, #060667 100%);
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #050816;
+  overflow: hidden;
+}
+
+/* slow aurora behind the 3D scene */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(40% 35% at 30% 30%, rgba(99, 102, 241, 0.45), transparent 70%),
+    radial-gradient(35% 30% at 75% 25%, rgba(163, 230, 53, 0.18), transparent 70%),
+    radial-gradient(45% 40% at 60% 80%, rgba(14, 165, 233, 0.25), transparent 70%),
+    linear-gradient(19deg, #040404 0%, #0b0b3d 100%);
+  animation: vm-aurora 24s ease-in-out infinite alternate;
+}
+@keyframes vm-aurora {
+  to { transform: translate(4%, -3%) rotate(8deg) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
 }

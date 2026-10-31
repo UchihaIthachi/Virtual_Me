@@ -1,4 +1,24 @@
-# Virtual Hotel Assistant with 3D Animation and AI Chatbot
+# Virtual Harshana: talk to my 3D twin
+
+## How it works now (Netlify)
+
+- **Site:** the Vite + React Three Fiber app in `Frontend/`, deployed on Netlify (`netlify.toml` at the repo root sets `base = "Frontend"`).
+- **Answers:** `Frontend/netlify/functions/ask.mjs` (`/api/ask`) asks my portfolio's chat (`/api/chat` on harshanalf.netlify.app), which answers only from the portfolio's own content (RAG). It asks in *voice mode*, so replies come back short and in the first person.
+- **Voice + lip sync:** the browser's built-in speech (Web Speech API) speaks the reply; `src/lib/speech.js` turns the text into mouth shapes (visemes) in time with the voice. No ffmpeg, Rhubarb, ElevenLabs or Google keys needed.
+- **Mood:** the function picks a facial expression and animation from the reply.
+
+### Deploy
+1. Netlify → Add new site → import this repo (settings come from `netlify.toml`).
+2. Optional env vars: `RAG_URL` (default `https://harshanalf.netlify.app`), `CHAT_PARTNER_TOKEN` (same value on the portfolio site, so its rate limit counts each visitor separately).
+
+### Local
+`cd Frontend && npx netlify dev` (runs the site and `/api/ask` together).
+
+> `Backend/` is the old Express + Rhubarb version, kept for reference; the Netlify site doesn't use it.
+
+---
+
+# (Original) Virtual Hotel Assistant with 3D Animation and AI Chatbot
 
 This project implements a virtual assistant with 3D animation capabilities and an AI chatbot powered by Rasa. The assistant can process text input from users, generate audio responses using Eleven Labs for text-to-speech conversion, synchronize lip movements and facial expressions using Rhubarb, and animate responses using ThreeJS.
 

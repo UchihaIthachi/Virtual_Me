@@ -1,6 +1,18 @@
+# Netlify: the site is the Vite app in Frontend/; answers come from a function
+# that asks the portfolio's chat (RAG over the portfolio's own content).
 [build]
+  base = "Frontend"
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
 
 [[redirects]]
   from = "/*"

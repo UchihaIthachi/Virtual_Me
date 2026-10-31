@@ -1,30 +1,25 @@
-// ErrorBoundary.jsx
-import React from 'react';
+import React from 'react'
 
+// Keeps the chat usable if a 3D asset fails to load: shows a small note
+// (or the given fallback) instead of a blank page.
 class ErrorBoundary extends React.Component {
-  // Error boundary implementation
   constructor(props) {
-    super(props);
-    this.state = { hasError: false };
+    super(props)
+    this.state = { hasError: false }
   }
 
   static getDerivedStateFromError() {
-    return { hasError: true };
+    return { hasError: true }
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error("Error caught in ErrorBoundary:", error, errorInfo);
+  componentDidCatch(error, info) {
+    console.error('3D scene failed:', error, info)
   }
 
   render() {
-    if (this.state.hasError) {
-      return <h1>Something went wrong.</h1>;
-    }
-
-    return this.props.children; 
+    if (this.state.hasError) return this.props.fallback ?? null
+    return this.props.children
   }
 }
 
-export default ErrorBoundary;
-
-  
+export default ErrorBoundary

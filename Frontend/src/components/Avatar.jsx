@@ -5,10 +5,79 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import * as THREE from 'three'
 import { useChat } from '../hooks/useChat'
+import { VISEMES, currentViseme, isSpeaking } from '../lib/speech'
+import { GESTURES, talkSway } from '../lib/gestures'
 
 const facialExpressions = {
   default: {},
+  thinking: {
+    browInnerUp: 0.45,
+    browDownLeft: 0.2,
+    eyeLookUpLeft: 0.55,
+    eyeLookUpRight: 0.55,
+    eyeSquintLeft: 0.2,
+    mouthPressLeft: 0.45,
+    mouthPressRight: 0.45,
+    mouthLeft: 0.3,
+  },
+  laugh: {
+    jawOpen: 0.32,
+    mouthSmileLeft: 1,
+    mouthSmileRight: 1,
+    eyeSquintLeft: 0.75,
+    eyeSquintRight: 0.75,
+    cheekSquintLeft: 0.8,
+    cheekSquintRight: 0.8,
+    browInnerUp: 0.2,
+  },
+  confident: {
+    mouthSmileLeft: 0.45,
+    mouthSmileRight: 0.28,
+    mouthDimpleLeft: 0.35,
+    eyeSquintLeft: 0.25,
+    eyeSquintRight: 0.25,
+    browDownRight: 0.12,
+  },
+  proud: {
+    mouthSmileLeft: 0.65,
+    mouthSmileRight: 0.65,
+    jawForward: 0.12,
+    browOuterUpLeft: 0.25,
+    browOuterUpRight: 0.25,
+    cheekSquintLeft: 0.35,
+    cheekSquintRight: 0.35,
+  },
+  curious: {
+    browOuterUpLeft: 0.65,
+    browInnerUp: 0.35,
+    eyeWideLeft: 0.3,
+    eyeWideRight: 0.25,
+    mouthLeft: 0.2,
+    mouthPucker: 0.15,
+  },
+  love: {
+    mouthPucker: 0.85,
+    eyeSquintLeft: 0.45,
+    eyeSquintRight: 0.45,
+    browInnerUp: 0.3,
+    cheekSquintLeft: 0.5,
+    cheekSquintRight: 0.5,
+  },
+  embarrassed: {
+    mouthSmileLeft: 0.35,
+    mouthSmileRight: 0.35,
+    mouthPressLeft: 0.4,
+    mouthPressRight: 0.4,
+    eyeLookDownLeft: 0.5,
+    eyeLookDownRight: 0.5,
+    browInnerUp: 0.4,
+    cheekSquintLeft: 0.4,
+  },
   smile: {
+    mouthSmileLeft: 0.55,
+    mouthSmileRight: 0.55,
+    cheekSquintLeft: 0.3,
+    cheekSquintRight: 0.3,
     browInnerUp: 0.17,
     eyeSquintLeft: 0.4,
     eyeSquintRight: 0.44,
@@ -87,42 +156,55 @@ const facialExpressions = {
   },
 }
 
-const corresponding = {
-  A: 'viseme_PP',
-  B: 'viseme_kk',
-  C: 'viseme_I',
-  D: 'viseme_AA',
-  E: 'viseme_O',
-  F: 'viseme_U',
-  G: 'viseme_FF',
-  H: 'viseme_TH',
-  X: 'viseme_PP',
-}
+
+// Draco decoder served from this site (no third-party CDN at runtime)
+const DRACO = '/draco/'
 
 let setupMode = false
 
 export function Avatar(props) {
-  const { nodes, materials, scene } = useGLTF('/models/me.glb')
+  const { nodes, materials, scene } = useGLTF('/models/me.glb', DRACO)
 
-  const { message, onMessagePlayed, chat } = useChat()
+  const { message, loading, poke } = useChat()
+  const look = useRef({ x: 0, y: 0 })
+  const gesture = useRef(null) // { name, start }
+  // ?debug in the URL exposes gestures for tuning from the console
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('debug')) {
+      window.__vm = { GESTURES, nodes, play: (name) => (gesture.current = { name, start: performance.now() }) }
+    }
+  }, [])
+  const talk = useRef(0)
 
-  const [lipsync, setLipsync] = useState()
-
+  // each reply sets the mood; speaking itself is handled by lib/speech
   useEffect(() => {
     if (!message) {
       setAnimation('idle')
+      setFacialExpression(loading ? 'default' : '')
       return
     }
-    setAnimation(message.animation)
-    setFacialExpression(message.facialExpression)
-    setLipsync(message.lipsync)
-    const audio = new Audio('data:audio/mp3;base64,' + message.audio)
-    audio.play()
-    setAudio(audio)
-    audio.onended = onMessagePlayed
+    const anim = message.animation && animations.find((a) => a.name === message.animation) ? message.animation : 'idle'
+    setAnimation(anim)
+    setFacialExpression(message.facialExpression || 'default')
+    gesture.current = message.gesture && GESTURES[message.gesture] ? { name: message.gesture, start: performance.now() } : null
+    if (message.wink) {
+      setWinkLeft(true)
+      setTimeout(() => setWinkLeft(false), 450)
+    }
   }, [message])
 
-  const { animations } = useGLTF('/models/animations.glb')
+  // thinking pose while waiting for the answer
+  useEffect(() => {
+    if (loading && !message) {
+      setFacialExpression('thinking')
+      gesture.current = { name: 'think', start: performance.now() }
+    } else if (!message && gesture.current?.name === 'think') {
+      gesture.current = null
+      setFacialExpression('')
+    }
+  }, [loading])
+
+  const { animations } = useGLTF('/models/animations.glb', DRACO)
 
   const group = useRef()
   const { actions, mixer } = useAnimations(animations, group)
@@ -171,9 +253,33 @@ export function Avatar(props) {
   const [winkLeft, setWinkLeft] = useState(false)
   const [winkRight, setWinkRight] = useState(false)
   const [facialExpression, setFacialExpression] = useState('')
-  const [audio, setAudio] = useState()
 
-  useFrame(() => {
+  useFrame((state) => {
+    // head (and a little of the neck) turns toward the cursor, on top of the animation
+    if (!setupMode && nodes.Head) {
+      const tx = THREE.MathUtils.clamp(state.pointer.x, -1, 1) * 0.45
+      const ty = THREE.MathUtils.clamp(-state.pointer.y, -1, 1) * -0.15
+      look.current.x = THREE.MathUtils.lerp(look.current.x, tx, 0.08)
+      look.current.y = THREE.MathUtils.lerp(look.current.y, ty, 0.08)
+      nodes.Head.rotation.y += look.current.x
+      nodes.Head.rotation.x += look.current.y
+      if (nodes.Neck) nodes.Neck.rotation.y += look.current.x * 0.35
+
+      // gesture on top
+      const g = gesture.current
+      if (g) {
+        const def = GESTURES[g.name]
+        const secs = (performance.now() - g.start) / 1000
+        let p = secs / def.dur
+        if (def.loop && p > 0.5) p = 0.5 // hold the middle while it's needed
+        if (p >= 1) gesture.current = null
+        else def.apply(nodes, p, state.clock.elapsedTime)
+      }
+      // small natural head movement while talking
+      talk.current = THREE.MathUtils.lerp(talk.current, isSpeaking() ? 1 : 0, 0.05)
+      talkSway(nodes, state.clock.elapsedTime, talk.current)
+    }
+
     !setupMode &&
       Object.keys(nodes.EyeLeft.morphTargetDictionary).forEach(
         (key) => {
@@ -197,32 +303,14 @@ export function Avatar(props) {
       return
     }
 
-    const appliedMorphTargets = []
-    if (message && lipsync) {
-      const currentAudioTime = audio.currentTime
-      for (let i = 0; i < lipsync.mouthCues.length; i++) {
-        const mouthCue = lipsync.mouthCues[i]
-        if (
-          currentAudioTime >= mouthCue.start &&
-          currentAudioTime <= mouthCue.end
-        ) {
-          appliedMorphTargets.push(corresponding[mouthCue.value])
-          lerpMorphTarget(corresponding[mouthCue.value], 1, 0.2)
-          break
-        }
-      }
-    }
-
-    Object.values(corresponding).forEach((value) => {
-      if (appliedMorphTargets.includes(value)) {
-        return
-      }
-      lerpMorphTarget(value, 0, 0.1)
+    // lips follow the voice: open the current viseme, relax the others
+    const now = currentViseme()
+    VISEMES.forEach((v) => {
+      lerpMorphTarget(v, v === now ? 1 : 0, v === now ? 0.35 : 0.18)
     })
   })
 
   useControls('FacialExpressions', {
-    chat: button(() => chat()),
     winkLeft: button(() => {
       setWinkLeft(true)
       setTimeout(() => setWinkLeft(false), 300)
@@ -307,7 +395,17 @@ export function Avatar(props) {
   }, [])
 
   return (
-    <group {...props} dispose={null} ref={group}>
+    <group
+      {...props}
+      dispose={null}
+      ref={group}
+      onClick={(e) => {
+        e.stopPropagation()
+        poke()
+      }}
+      onPointerOver={() => (document.body.style.cursor = 'pointer')}
+      onPointerOut={() => (document.body.style.cursor = '')}
+    >
       <primitive object={nodes.Hips} />
       <skinnedMesh
         name='EyeLeft'
@@ -406,5 +504,5 @@ export function Avatar(props) {
   )
 }
 
-useGLTF.preload('/models/me.glb')
-useGLTF.preload('/models/animations.glb')
+useGLTF.preload('/models/me.glb', DRACO)
+useGLTF.preload('/models/animations.glb', DRACO)
