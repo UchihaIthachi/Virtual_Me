@@ -2,9 +2,22 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat'
 import { canSpeak, isMuted, setMuted, spokenChar, unlockSpeech } from '../lib/speech'
 import { ACTIONS, GREETING, TOPICS } from '../lib/local'
+import { LOOKS } from '../lib/looks'
+import * as Ic from './Icons'
+
+const LINKS = [
+  { href: 'https://github.com/UchihaIthachi', label: 'GitHub', Icon: Ic.Github },
+  { href: 'https://www.linkedin.com/in/harshana-lakshara/', label: 'LinkedIn', Icon: Ic.Linkedin },
+  { href: 'https://harshanalf.netlify.app', label: 'Portfolio', Icon: Ic.Globe },
+]
+const VIEWS = [
+  { id: 'face', label: 'Face' },
+  { id: 'half', label: 'Half' },
+  { id: 'full', label: 'Full' },
+]
 
 const PORTFOLIO = 'https://harshanalf.netlify.app'
-const glass = 'border border-white/15 bg-slate-900/55 text-white shadow-[0_10px_40px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl'
+const glass = 'glass text-white'
 const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 
 /** Caption that lights up word by word as the avatar speaks. */
@@ -32,7 +45,7 @@ function Caption({ text, live }) {
         const now = !done && at >= x.start && at < x.end
         const past = done || at >= x.end
         return (
-          <span key={i} className={`transition-colors duration-150 ${now ? 'rounded bg-lime-300/25 text-lime-200' : past ? 'text-white' : 'text-white/35'}`}>
+          <span key={i} className={`transition-colors duration-150 ${now ? 'rounded bg-cyan-300/20 text-cyan-100' : past ? 'text-white' : 'text-white/35'}`}>
             {x.w}
           </span>
         )
@@ -42,7 +55,7 @@ function Caption({ text, live }) {
 }
 
 /** Small animated bars while speaking / thinking. */
-function Bars({ on, color = 'bg-lime-300' }) {
+function Bars({ on, color = 'bg-cyan-300' }) {
   return (
     <span className='inline-flex h-4 items-end gap-[3px]' aria-hidden>
       {[0, 1, 2, 3].map((i) => (
@@ -58,7 +71,8 @@ function Bars({ on, color = 'bg-lime-300' }) {
 
 export const UI = ({ hidden }) => {
   const input = useRef()
-  const { chat, say, loading, cameraZoomed, setCameraZoomed, message, log, stop, lastActive } = useChat()
+  const { chat, say, loading, message, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView } = useChat()
+  const [showStyle, setShowStyle] = useState(false)
   const [mute, setMute] = useState(isMuted())
   const [showLog, setShowLog] = useState(false)
   const [showActions, setShowActions] = useState(true)
@@ -171,17 +185,17 @@ export const UI = ({ hidden }) => {
       {intro && (
         <div className='fixed inset-0 z-30 grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm'>
           <div className={`${glass} w-full max-w-md rounded-3xl p-7 text-center`} style={{ animation: 'vm-in .5s ease-out' }}>
-            <div className='mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-lime-400 to-indigo-500 text-2xl font-black text-slate-950 shadow-lg'>HF</div>
+            <div className='mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-violet-500 text-2xl font-black text-slate-950 shadow-lg'>HF</div>
             <h2 className='mt-4 text-2xl font-black tracking-tight'>Meet my 3D twin</h2>
             <p className='mt-2 text-sm text-white/70'>
               Ask about my work in trading systems, backend and open source. Answers come from my portfolio; your browser does the talking.
             </p>
             <div className='mt-6 grid gap-2 sm:grid-cols-2'>
-              <button onClick={() => closeIntro(true)} className='rounded-xl bg-lime-400 px-4 py-3 font-bold text-slate-950 transition hover:-translate-y-0.5 hover:bg-lime-300'>
-                🔊 Start talking
+              <button onClick={() => closeIntro(true)} className='rounded-xl bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-300'>
+                Start talking
               </button>
               <button onClick={() => closeIntro(false)} className='rounded-xl border border-white/20 px-4 py-3 font-semibold text-white/90 transition hover:bg-white/10'>
-                🔇 Captions only
+                Captions only
               </button>
             </div>
             <p className='mt-4 text-[11px] text-white/50'>Tip: tap the avatar, or say &ldquo;dance&rdquo;.</p>
@@ -192,23 +206,47 @@ export const UI = ({ hidden }) => {
       <div className='pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-3 sm:p-6'>
         {/* header */}
         <div className='flex items-start justify-between gap-3'>
-          <div className={`${glass} pointer-events-auto rounded-2xl px-4 py-3`}>
-            <h1 className='text-lg font-black tracking-tight sm:text-xl'>
-              Virtual <span className='bg-gradient-to-r from-lime-300 to-indigo-300 bg-clip-text text-transparent'>Harshana</span>
-            </h1>
-            <p className='mt-1 flex items-center gap-2 text-xs text-white/70'>
-              {busy || listening ? (
-                <Bars on color={listening ? 'bg-rose-400' : loading ? 'bg-indigo-300' : 'bg-lime-300'} />
-              ) : (
-                <span className='relative flex h-2 w-2'>
-                  <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75' />
-                  <span className='relative inline-flex h-2 w-2 rounded-full bg-emerald-500' />
-                </span>
-              )}
-              {status}
-            </p>
+          <div className={`${glass} pointer-events-auto flex items-center gap-3 rounded-[22px] p-2.5 pr-4`}>
+            <div className='relative grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 text-sm font-black text-slate-950'>
+              HF
+              <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 ${busy || listening ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+            </div>
+            <div className='min-w-0'>
+              <h1 className='truncate text-[15px] font-bold leading-tight tracking-tight sm:text-base'>Harshana Fernando</h1>
+              <p className='hidden text-[11px] text-white/60 sm:block'>Software Engineer · Trading Systems</p>
+              <p className='mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-cyan-200/90'>
+                {busy || listening ? <Bars on color={listening ? 'bg-rose-400' : loading ? 'bg-violet-300' : 'bg-cyan-300'} /> : <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />}
+                {status.toLowerCase()}
+              </p>
+            </div>
+            <div className='ml-1 hidden items-center gap-1 border-l border-white/10 pl-3 sm:flex'>
+              {LINKS.map(({ href, label, Icon }) => (
+                <a key={label} href={href} target='_blank' rel='noreferrer' title={label} aria-label={label} className='rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white'>
+                  <Icon size={16} />
+                </a>
+              ))}
+            </div>
           </div>
-          <div className='pointer-events-auto flex gap-2'>
+          <div className='pointer-events-auto flex flex-wrap justify-end gap-2'>
+            <div className={`${glass} hidden rounded-2xl p-1 sm:flex`} role='tablist' aria-label='Camera'>
+              {VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  role='tab'
+                  aria-selected={view === v.id}
+                  onClick={() => setView(v.id)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === v.id ? 'bg-white text-slate-900' : 'text-white/70 hover:text-white'}`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <IconBtn onClick={() => setShowStyle((v) => !v)} label='Style' active={showStyle}>
+              <Ic.Shirt />
+            </IconBtn>
+            <IconBtn onClick={() => setShowActions((v) => !v)} label='Actions and emotions' active={showActions}>
+              <Ic.Sparkle />
+            </IconBtn>
             {canSpeak() && (
               <IconBtn
                 onClick={() => {
@@ -217,25 +255,61 @@ export const UI = ({ hidden }) => {
                 }}
                 label={mute ? 'Turn voice on' : 'Mute voice'}
               >
-                {mute ? '🔇' : '🔊'}
+                {mute ? <Ic.VolumeOff /> : <Ic.Volume />}
               </IconBtn>
             )}
-            <IconBtn onClick={() => setCameraZoomed(!cameraZoomed)} label={cameraZoomed ? 'Full body' : 'Close up'}>
-              {cameraZoomed ? '🧍' : '🙂'}
-            </IconBtn>
-            <IconBtn onClick={() => setShowActions((v) => !v)} label='Actions and emotions' active={showActions}>
-              🎭
-            </IconBtn>
             <IconBtn onClick={() => setShowLog((v) => !v)} label='Conversation' active={showLog}>
-              💬{log.length > 0 && <span className='ml-1 text-[10px] font-bold'>{Math.ceil(log.length / 2)}</span>}
+              <Ic.Chat />
+              {log.length > 0 && <span className='ml-1 font-mono text-[10px] font-bold'>{Math.ceil(log.length / 2)}</span>}
             </IconBtn>
           </div>
         </div>
 
+        {/* style picker */}
+        {showStyle && (
+          <div className={`${glass} pointer-events-auto absolute right-3 top-20 w-[min(300px,calc(100vw-1.5rem))] rounded-2xl p-4 sm:right-6`} style={{ animation: 'vm-in .25s ease-out' }}>
+            <p className='mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/50'>Style</p>
+            <div className='grid grid-cols-5 gap-2'>
+              {LOOKS.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => {
+                    setLook(l.id)
+                    setGlasses(l.glasses)
+                  }}
+                  title={`${l.label}: ${l.desc}`}
+                  className='group flex flex-col items-center gap-1'
+                >
+                  <span
+                    className={`relative h-10 w-10 overflow-hidden rounded-xl border-2 transition ${look === l.id ? 'scale-105 border-cyan-300' : 'border-white/15 group-hover:border-white/40'}`}
+                    style={{ background: `linear-gradient(180deg, ${l.top} 0 58%, ${l.bottom} 58% 100%)` }}
+                  />
+                  <span className={`text-[10px] ${look === l.id ? 'text-cyan-200' : 'text-white/60'}`}>{l.label}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setGlasses(!glasses)} className='mt-4 flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10'>
+              <span className='flex items-center gap-2'>
+                <Ic.Glasses /> Glasses
+              </span>
+              <span className={`relative h-5 w-9 rounded-full transition ${glasses ? 'bg-cyan-400' : 'bg-white/20'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${glasses ? 'left-[18px]' : 'left-0.5'}`} />
+              </span>
+            </button>
+            <div className='mt-3 grid grid-cols-3 gap-1 sm:hidden'>
+              {VIEWS.map((v) => (
+                <button key={v.id} onClick={() => setView(v.id)} className={`rounded-lg py-1.5 text-xs font-semibold ${view === v.id ? 'bg-white text-slate-900' : 'bg-white/5 text-white/70'}`}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* actions & emotions */}
         {showActions && (
           <div
-            className={`${glass} pointer-events-auto absolute left-3 top-1/2 hidden -translate-y-1/2 grid-cols-2 gap-1 rounded-2xl p-2 sm:left-6 md:grid`}
+            className={`${glass} pointer-events-auto absolute left-3 top-1/2 hidden -translate-y-1/2 grid-cols-2 gap-1 rounded-[22px] p-2.5 sm:left-6 md:grid`}
             style={{ animation: 'vm-in .3s ease-out' }}
             aria-label='Actions and emotions'
           >
@@ -246,7 +320,7 @@ export const UI = ({ hidden }) => {
                 onClick={() => act(a)}
                 disabled={loading}
                 title={a.label}
-                className='group flex w-[86px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-left text-xs font-medium text-white/85 transition hover:bg-white/15 disabled:opacity-40'
+                className='group flex w-[86px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-left text-xs font-medium text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40'
               >
                 <span className='text-base transition-transform group-hover:scale-125'>{a.emoji}</span>
                 {a.label}
@@ -257,7 +331,7 @@ export const UI = ({ hidden }) => {
 
         {/* transcript drawer */}
         {showLog && (
-          <div className={`${glass} pointer-events-auto absolute right-3 top-24 max-h-[55vh] w-[min(380px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-4 text-sm sm:right-6`} style={{ animation: 'vm-in .25s ease-out' }}>
+          <div className={`${glass} pointer-events-auto absolute right-3 top-20 max-h-[55vh] w-[min(380px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-4 text-sm sm:right-6`} style={{ animation: 'vm-in .25s ease-out' }}>
             <p className='mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/50'>Conversation</p>
             {log.length === 0 && <p className='text-white/60'>Nothing yet. Ask me something!</p>}
             {log.map((m, i) => (
@@ -281,7 +355,7 @@ export const UI = ({ hidden }) => {
           )}
 
           {(captionText || loading) && (
-            <div className={`${glass} pointer-events-auto self-center rounded-2xl px-5 py-3 text-center`} key={captionText || 'thinking'} style={{ animation: 'vm-in .35s ease-out' }}>
+            <div className={`${glass} pointer-events-auto max-w-xl self-center rounded-[22px] px-6 py-3.5 text-center`} key={captionText || 'thinking'} style={{ animation: 'vm-in .35s ease-out' }}>
               {loading && !message ? (
                 <span className='inline-flex items-center gap-2 text-sm text-white/80'>
                   <Bars on color='bg-indigo-300' /> Looking through my portfolio…
@@ -300,7 +374,7 @@ export const UI = ({ hidden }) => {
                   key={a.id}
                   onClick={() => act(a)}
                   disabled={loading}
-                  className='flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-xs text-white backdrop-blur-md disabled:opacity-40'
+                  className='glass flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs text-white disabled:opacity-40'
                 >
                   <span>{a.emoji}</span>
                   {a.label}
@@ -319,7 +393,7 @@ export const UI = ({ hidden }) => {
                     role='tab'
                     aria-selected={topic === t.id}
                     onClick={() => setTopic(t.id)}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${topic === t.id ? 'bg-white text-slate-900' : 'text-white/75 hover:bg-white/10'}`}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:text-[13px] ${topic === t.id ? 'bg-white text-slate-900 shadow-[0_4px_20px_-4px_rgba(255,255,255,0.5)]' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                   >
                     <span className='mr-1'>{t.emoji}</span>
                     {t.label}
@@ -332,7 +406,7 @@ export const UI = ({ hidden }) => {
                     key={q}
                     disabled={!qs.length}
                     onClick={() => send(q)}
-                    className='rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm text-white backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/20 disabled:opacity-50'
+                    className='glass rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/90 transition hover:-translate-y-0.5 hover:text-white hover:shadow-[0_0_0_1px_rgba(34,211,238,0.45),0_12px_30px_-12px_rgba(34,211,238,0.5)] disabled:opacity-50'
                     style={{ animation: `vm-in .3s ease-out ${i * 0.06}s both` }}
                   >
                     {q}
@@ -343,17 +417,17 @@ export const UI = ({ hidden }) => {
           )}
 
           {/* input */}
-          <div className={`${glass} pointer-events-auto flex items-center gap-2 rounded-2xl p-2`}>
+          <div className={`${glass} glass-edge pointer-events-auto flex items-center gap-2 rounded-[22px] p-2 transition focus-within:shadow-[0_0_0_6px_rgba(34,211,238,0.10),0_24px_60px_-24px_rgba(0,0,0,0.85)]`}>
             {Recognition && (
               <button
                 onClick={listen}
                 disabled={busy}
                 aria-label={listening ? 'Stop listening' : 'Speak your question'}
                 title={listening ? 'Stop listening' : 'Speak your question'}
-                className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg transition ${listening ? 'bg-rose-500 text-white' : 'bg-white/10 hover:bg-white/20'} disabled:opacity-40`}
+                className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-lg transition ${listening ? 'bg-rose-500 text-white' : 'bg-white/[0.06] text-white/80 hover:bg-white/15 hover:text-white'} disabled:opacity-40`}
               >
                 {listening && <span className='absolute inset-0 animate-ping rounded-xl bg-rose-500/50' />}
-                <span className='relative'>🎙️</span>
+                <Ic.Mic className='relative' />
               </button>
             )}
             <input
@@ -367,15 +441,15 @@ export const UI = ({ hidden }) => {
             />
             {message ? (
               <button onClick={stop} className='h-12 shrink-0 rounded-xl bg-white/15 px-5 font-semibold text-white hover:bg-white/25'>
-                ■ Stop
+                <span className='flex items-center gap-1.5'><Ic.Stop size={14} /> Stop</span>
               </button>
             ) : (
               <button
                 disabled={busy}
                 onClick={() => send()}
-                className='h-12 shrink-0 rounded-xl bg-lime-400 px-6 font-bold text-slate-950 transition hover:bg-lime-300 disabled:opacity-40'
+                className='flex h-12 shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 px-5 font-semibold text-slate-950 shadow-[0_8px_30px_-8px_rgba(34,211,238,0.7)] transition hover:brightness-110 disabled:opacity-40'
               >
-                Ask
+                Ask <Ic.Send size={16} />
               </button>
             )}
           </div>
@@ -397,7 +471,7 @@ function IconBtn({ onClick, label, children, active }) {
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`${glass} grid h-11 min-w-[44px] place-items-center rounded-xl px-3 text-base transition hover:-translate-y-0.5 hover:bg-slate-800/70 ${active ? 'ring-2 ring-lime-300/60' : ''}`}
+      className={`${glass} grid h-11 min-w-[44px] place-items-center rounded-2xl px-3 text-white/80 transition hover:-translate-y-0.5 hover:text-white ${active ? 'text-cyan-200 shadow-[0_0_0_1px_rgba(34,211,238,0.6),0_10px_30px_-10px_rgba(34,211,238,0.6)]' : ''}`}
     >
       <span className='flex items-center'>{children}</span>
     </button>

@@ -13,8 +13,25 @@ export const ChatProvider = ({ children }) => {
   const [log, setLog] = useState([]) // [{role, content}] transcript + history
   const [loading, setLoading] = useState(false)
   const [cameraZoomed, setCameraZoomed] = useState(true)
+  const [view, setView] = useState('face') // face | half | full
   const [lastActive, setLastActive] = useState(() => Date.now())
   const busy = useRef(false)
+  const [look, setLookState] = useState(() => {
+    try {
+      return localStorage.getItem('vm.look') || 'dev'
+    } catch {
+      return 'dev'
+    }
+  })
+  const [glasses, setGlasses] = useState(true)
+  const setLook = useCallback((id) => {
+    setLookState(id)
+    try {
+      localStorage.setItem('vm.look', id)
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const say = useCallback((m, { record = true } = {}) => {
     if (record) setLog((l) => [...l, { role: 'assistant', content: m.text }])
@@ -80,7 +97,7 @@ export const ChatProvider = ({ children }) => {
   }, [])
 
   return (
-    <ChatContext.Provider value={{ chat, say, poke, message, loading, cameraZoomed, setCameraZoomed, log, stop, lastActive }}>
+    <ChatContext.Provider value={{ chat, say, poke, message, loading, cameraZoomed, setCameraZoomed, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView }}>
       {children}
     </ChatContext.Provider>
   )

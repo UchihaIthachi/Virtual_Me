@@ -7,6 +7,8 @@ import * as THREE from 'three'
 import { useChat } from '../hooks/useChat'
 import { VISEMES, currentViseme, isSpeaking } from '../lib/speech'
 import { GESTURES, talkSway } from '../lib/gestures'
+import { LOOKS, SKIN } from '../lib/looks'
+import { useGlasses } from './Glasses'
 
 const facialExpressions = {
   default: {},
@@ -169,8 +171,26 @@ export function Avatar(props) {
   const { nodes, materials, scene } = useGLTF('/models/me.glb', DRACO)
   const MORPH_KEYS = useMemo(() => Object.keys(nodes.EyeLeft.morphTargetDictionary).concat(Object.keys(nodes.Wolf3D_Head.morphTargetDictionary)).filter((k, i, a) => a.indexOf(k) === i), [nodes])
 
-  const { message, loading, poke } = useChat()
+  const { message, loading, poke, look: lookId, glasses } = useChat()
   const look = useRef({ x: 0, y: 0 })
+
+  // outfit / style: recolor the model's own materials (keeps folds and shading)
+  const originals = useMemo(() => ({ top: materials.Wolf3D_Outfit_Top.map }), [materials])
+  useEffect(() => {
+    const L = LOOKS.find((x) => x.id === lookId) || LOOKS[0]
+    const top = materials.Wolf3D_Outfit_Top
+    top.map = null // plain color instead of the printed texture
+    top.color.set(L.top)
+    top.roughness = 0.85
+    top.needsUpdate = true
+    materials.Wolf3D_Outfit_Bottom.color.set(L.bottom)
+    materials.Wolf3D_Hair.color.set(L.hair)
+    materials.Wolf3D_Skin.color.set(SKIN)
+    materials.Wolf3D_Body.color.set(SKIN)
+    return undefined
+  }, [lookId, materials, originals])
+  const lookDef = LOOKS.find((x) => x.id === lookId) || LOOKS[0]
+  useGlasses(nodes, glasses)
   const gesture = useRef(null) // { name, start }
   // ?debug in the URL exposes gestures for tuning from the console
   useEffect(() => {

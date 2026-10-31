@@ -28,22 +28,30 @@ function useCanvasTexture(w, h) {
 
 function frame(ctx, w, h, title, status) {
   ctx.clearRect(0, 0, w, h)
-  ctx.fillStyle = 'rgba(8, 12, 40, 0.82)'
-  ctx.strokeStyle = 'rgba(129, 140, 248, 0.9)'
-  ctx.lineWidth = 3
+  // frosted glass card: faint fill, top sheen, thin bright edge
+  const fill = ctx.createLinearGradient(0, 0, 0, h)
+  fill.addColorStop(0, 'rgba(255,255,255,0.10)')
+  fill.addColorStop(1, 'rgba(255,255,255,0.03)')
+  ctx.fillStyle = fill
   ctx.beginPath()
-  ctx.roundRect(4, 4, w - 8, h - 8, 18)
+  ctx.roundRect(3, 3, w - 6, h - 6, 22)
   ctx.fill()
+  const edge = ctx.createLinearGradient(0, 0, w, h)
+  edge.addColorStop(0, 'rgba(165,243,252,0.85)')
+  edge.addColorStop(0.5, 'rgba(255,255,255,0.18)')
+  edge.addColorStop(1, 'rgba(196,181,253,0.7)')
+  ctx.strokeStyle = edge
+  ctx.lineWidth = 2
   ctx.stroke()
-  ctx.font = '600 22px Inter, system-ui, sans-serif'
-  ctx.fillStyle = '#c7d2fe'
-  ctx.fillText(title, 22, 38)
+  ctx.font = '600 20px Inter, system-ui, sans-serif'
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'
+  ctx.fillText(title, 24, 40)
   ctx.textAlign = 'right'
-  ctx.fillStyle = '#a3e635'
-  ctx.fillText(status, w - 22, 38)
+  ctx.fillStyle = '#5eead4'
+  ctx.fillText(status, w - 24, 40)
   ctx.textAlign = 'left'
-  ctx.fillStyle = 'rgba(129,140,248,0.35)'
-  ctx.fillRect(18, 52, w - 36, 2)
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'
+  ctx.fillRect(20, 56, w - 40, 1)
 }
 
 /** Candles that keep ticking. Faster while the avatar is thinking. */
@@ -166,9 +174,9 @@ function Badges() {
         c.width = 192
         c.height = 72
         const x = c.getContext('2d')
-        x.fillStyle = 'rgba(8,12,40,0.85)'
-        x.strokeStyle = 'rgba(163,230,53,0.9)'
-        x.lineWidth = 3
+        x.fillStyle = 'rgba(255,255,255,0.08)'
+        x.strokeStyle = 'rgba(165,243,252,0.6)'
+        x.lineWidth = 2
         x.beginPath()
         x.roundRect(3, 3, 186, 66, 33)
         x.fill()
