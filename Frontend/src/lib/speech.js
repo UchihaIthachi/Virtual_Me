@@ -60,16 +60,48 @@ export const setMuted = (m) => {
 export const isMuted = () => muted;
 export const canSpeak = () => typeof window !== "undefined" && "speechSynthesis" in window;
 
-// prefer a natural English voice, male if available
+// Always a male voice. Browsers often default to a female one (Samantha on
+// macOS/iOS, "Google US English", Microsoft Zira/Aria/Jenny), and before the
+// voice list has loaded no voice is set at all, so the default spoke. We wait
+// for the list, pick a known male voice, never pick a known female one, and
+// if only unknown voices exist we use one with a lower pitch.
+const MALE = [
+  /Google UK English Male/i,
+  /\bDaniel\b/i, /\bAlex\b/i, /\bFred\b/i, /\bAaron\b/i, /\bArthur\b/i, /\bGordon\b/i,
+  /\bOliver\b/i, /\bReed\b/i, /\bRishi\b/i, /\bTom\b/i, /\bEvan\b/i, /\bNathan\b/i, /\bRalph\b/i,
+  /Microsoft (Guy|Ryan|Andrew|Brian|Christopher|Eric|Roger|Steffan|Thomas|William|Liam|Mark|David|George|James|Ravi|Prabhat|Connor|Mitchell|Davis|Jason|Tony)/i,
+  /\bmale\b/i,
+];
+const FEMALE = /female|samantha|victoria|karen|moira|tessa|fiona|veena|\bkate\b|serena|susan|allison|\bava\b|zira|hazel|aria|jenny|sonia|libby|emma|michelle|natasha|clara|neerja|heera|catherine|nicky|kathy|vicki|princess|Google US English$/i;
+
+let chosen = null; // { voice, known }
 function pickVoice() {
+  if (!canSpeak()) return null;
   const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
   const en = voices.filter((v) => /^en[-_]/i.test(v.lang));
-  const pref = [/Google UK English Male/i, /Daniel/i, /Microsoft (Guy|Ryan|Andrew|Brian|David)/i, /Male/i, /Alex/i, /Google US English/i];
-  for (const re of pref) {
-    const v = en.find((x) => re.test(x.name));
-    if (v) return v;
+  for (const re of MALE) {
+    const v = en.find((x) => re.test(x.name) && !FEMALE.test(x.name));
+    if (v) return (chosen = { voice: v, known: true });
   }
-  return en[0] || voices[0] || null;
+  const notFemale = en.find((x) => !FEMALE.test(x.name)) || voices.find((x) => !FEMALE.test(x.name));
+  return (chosen = notFemale ? { voice: notFemale, known: false } : null);
+}
+
+/** The voice list loads asynchronously (Chrome): wait for it, at most ~1.2 s. */
+function voiceReady() {
+  if (chosen) return Promise.resolve(chosen);
+  if (pickVoice()) return Promise.resolve(chosen);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve(pickVoice());
+    };
+    window.speechSynthesis.addEventListener?.("voiceschanged", finish, { once: true });
+    setTimeout(finish, 1200);
+  });
 }
 
 /** iOS/Safari only allow speech after a tap: call this inside the click handler. */
@@ -105,11 +137,18 @@ export function speak(text) {
       return;
     }
     window.speechSynthesis.cancel();
+    voiceReady().then((pick) => {
+    // no voice we can trust to be male: stay silent rather than speak in a female voice
+    if (!pick) {
+      start();
+      setTimeout(finish, (text.length / CHARS_PER_SEC) * 1000 + 300);
+      return;
+    }
     const u = new SpeechSynthesisUtterance(text);
-    const v = pickVoice();
-    if (v) u.voice = v;
+    u.voice = pick.voice;
+    u.lang = pick.voice.lang;
     u.rate = RATE;
-    u.pitch = 0.95;
+    u.pitch = pick.known ? 0.95 : 0.8; // unknown voice: a little deeper
     u.onstart = start;
     u.onboundary = (e) => {
       if (typeof e.charIndex === "number") {
@@ -124,6 +163,7 @@ export function speak(text) {
       if (!state.speaking) start();
     }, 400);
     window.speechSynthesis.speak(u);
+    });
   });
 }
 
@@ -132,5 +172,8 @@ export function stopSpeaking() {
   state.speaking = false;
 }
 
-// voices load asynchronously in Chrome
-if (canSpeak()) window.speechSynthesis.onvoiceschanged = () => pickVoice();
+// voices load asynchronously in Chrome: re-pick when the list changes
+if (canSpeak()) window.speechSynthesis.onvoiceschanged = () => {
+  chosen = null;
+  pickVoice();
+};
