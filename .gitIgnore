@@ -32,3 +32,6 @@ service-account.json
 *.pem
 .netlify/
 dist/
+
+# local review build
+_vm_review.tgz

@@ -47,7 +47,7 @@ const Stage = () => {
     }
     if (glow.current) glow.current.material.opacity = 0.18 + l * 0.3;
   });
-  const color = message?.facialExpression === "sad" ? "#60a5fa" : ["smile", "laugh", "proud"].includes(message?.facialExpression) ? "#34d399" : "#22d3ee";
+  const color = message?.facialExpression === "sad" ? "#94a3b8" : ["smile", "laugh", "proud"].includes(message?.facialExpression) ? "#34d399" : "#e2e8f0";
   return (
     <group rotation-x={-Math.PI / 2} position-y={0.005}>
       <mesh ref={glow}>
@@ -60,7 +60,7 @@ const Stage = () => {
       </mesh>
       <mesh ref={outer}>
         <ringGeometry args={[0.7, 0.71, 96]} />
-        <meshBasicMaterial color="#a5f3fc" transparent opacity={0.15} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#f8fafc" transparent opacity={0.12} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
@@ -73,9 +73,9 @@ const Halo = () => {
     c.width = c.height = 256;
     const x = c.getContext("2d");
     const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
-    g.addColorStop(0, "rgba(56,189,248,0.55)");
-    g.addColorStop(0.35, "rgba(56,189,248,0.18)");
-    g.addColorStop(0.7, "rgba(139,92,246,0.06)");
+    g.addColorStop(0, "rgba(226,232,240,0.38)");
+    g.addColorStop(0.35, "rgba(203,213,225,0.12)");
+    g.addColorStop(0.7, "rgba(16,185,129,0.05)");
     g.addColorStop(1, "rgba(0,0,0,0)");
     x.fillStyle = g;
     x.fillRect(0, 0, 256, 256);
@@ -112,7 +112,7 @@ const Floor = () => {
         depthScale={1}
         minDepthThreshold={0.4}
         maxDepthThreshold={1.4}
-        color="#080c16"
+        color="#0b0d12"
       />
     </mesh>
   );
@@ -156,11 +156,11 @@ export const Experience = () => {
       <hemisphereLight args={["#e0f2fe", "#0f172a", 0.85]} />
       <directionalLight position={[2.5, 4, 3]} intensity={1.7} castShadow />
       {/* cool and warm rims for a studio look */}
-      <spotLight position={[-2.5, 3, -2]} angle={0.6} penumbra={0.9} intensity={2.4} color="#22d3ee" />
-      <spotLight position={[2.5, 3, -2]} angle={0.6} penumbra={0.9} intensity={1.8} color="#a78bfa" />
+      <spotLight position={[-2.5, 3, -2]} angle={0.6} penumbra={0.9} intensity={2.2} color="#f1f5f9" />
+      <spotLight position={[2.5, 3, -2]} angle={0.6} penumbra={0.9} intensity={1.6} color="#34d399" />
       {/* studio: solid backdrop, depth fog, light halo, mirror floor with a faint grid */}
-      <color attach="background" args={["#05070d"]} />
-      <fog attach="fog" args={["#05070d", 5, 13]} />
+      <color attach="background" args={["#07090e"]} />
+      <fog attach="fog" args={["#07090e", 5, 13]} />
       <Halo />
       <Floor />
       <Grid
@@ -176,7 +176,7 @@ export const Experience = () => {
         fadeStrength={2}
         infiniteGrid
       />
-      <Sparkles count={24} scale={[4, 3, 2.5]} position={[0, 1.5, -0.8]} size={1.3} speed={0.2} opacity={0.35} color="#e0f2fe" />
+      <Sparkles count={24} scale={[4, 3, 2.5]} position={[0, 1.5, -0.8]} size={1.3} speed={0.2} opacity={0.35} color="#f8fafc" />
       <Stage />
       <Avatar />
       <Holo />

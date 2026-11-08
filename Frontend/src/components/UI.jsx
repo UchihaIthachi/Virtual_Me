@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat'
 import { canSpeak, isMuted, setMuted, spokenChar, unlockSpeech } from '../lib/speech'
-import { ACTIONS, GREETING, TOPICS } from '../lib/local'
+import { ACTIONS, GREETING, TOPICS, lockedLine } from '../lib/local'
 import { LOOKS } from '../lib/looks'
 import * as Ic from './Icons'
+import { track } from '../lib/track'
 
 const LINKS = [
   { href: 'https://github.com/UchihaIthachi', label: 'GitHub', Icon: Ic.Github },
   { href: 'https://www.linkedin.com/in/harshana-lakshara/', label: 'LinkedIn', Icon: Ic.Linkedin },
-  { href: 'https://harshanalf.netlify.app', label: 'Portfolio', Icon: Ic.Globe },
+  { href: 'https://harshanalf.netlify.app/portfolio', label: 'Portfolio', Icon: Ic.Globe },
 ]
 const VIEWS = [
   { id: 'face', label: 'Face' },
@@ -16,7 +17,8 @@ const VIEWS = [
   { id: 'full', label: 'Full' },
 ]
 
-const PORTFOLIO = 'https://harshanalf.netlify.app'
+// the portfolio page itself (CV, projects, contact), not the 3D island home
+const PORTFOLIO = 'https://harshanalf.netlify.app/portfolio'
 const glass = 'glass text-white'
 const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 
@@ -65,7 +67,7 @@ function Caption({ text, live, small }) {
         const now = !done && at >= x.start && at < x.end
         const past = done || at >= x.end
         return (
-          <span key={i} className={`transition-colors duration-150 ${now ? 'rounded bg-cyan-300/20 text-cyan-100' : past ? 'text-white' : 'text-white/35'}`}>
+          <span key={i} className={`transition-colors duration-150 ${now ? 'rounded bg-emerald-400/20 text-white' : past ? 'text-white' : 'text-white/35'}`}>
             {x.w}
           </span>
         )
@@ -75,7 +77,7 @@ function Caption({ text, live, small }) {
 }
 
 /** Small animated bars while speaking / thinking. */
-function Bars({ on, color = 'bg-cyan-300' }) {
+function Bars({ on, color = 'bg-emerald-300' }) {
   return (
     <span className='inline-flex h-4 items-end gap-[3px]' aria-hidden>
       {[0, 1, 2, 3].map((i) => (
@@ -112,11 +114,12 @@ export const UI = ({ hidden }) => {
   const asked = new Set(log.filter((m) => m.role === 'user').map((m) => m.content))
   const qs = (TOPICS.find((t) => t.id === topic)?.qs || []).filter((q) => !asked.has(q))
 
-  const send = (text) => {
+  // how: 'text' | 'voice' | 'topic' | 'nudge' (shown on the portfolio's /insights)
+  const send = (text, how = 'text') => {
     const t = (text ?? input.current?.value ?? '').trim()
     if (!t || busy) return
     setNudge(null)
-    chat(t)
+    chat(t, how)
     if (input.current) input.current.value = ''
   }
 
@@ -127,6 +130,7 @@ export const UI = ({ hidden }) => {
       /* ignore */
     }
     setIntro(false)
+    track('vm_voice', { label: withVoice ? 'Started with sound' : 'Started muted' })
     setMuted(!withVoice)
     setMute(!withVoice)
     if (withVoice) unlockSpeech()
@@ -136,10 +140,11 @@ export const UI = ({ hidden }) => {
   // emotes: instant, interrupt whatever is playing
   const act = (a) => {
     if (loading) return
+    track('vm_action', { label: `Emote · ${a.label}${a.locked ? ' (locked)' : ''}` })
     unlockSpeech()
     stop()
     setNudge(null)
-    setTimeout(() => say(a.m, { record: false }), 30)
+    setTimeout(() => say(a.locked ? lockedLine(a.id) : a.m, { record: false }), 30)
   }
 
   // voice input (Chrome, Edge, Safari)
@@ -150,6 +155,7 @@ export const UI = ({ hidden }) => {
       return
     }
     unlockSpeech()
+    track('vm_voice', { label: 'Mic used' })
     const rec = new Recognition()
     rec.lang = 'en-US'
     rec.interimResults = true
@@ -157,14 +163,33 @@ export const UI = ({ hidden }) => {
     rec.onresult = (e) => {
       const r = e.results[e.results.length - 1]
       if (input.current) input.current.value = r[0].transcript
-      if (r.isFinal) send(r[0].transcript)
+      if (r.isFinal) send(r[0].transcript, 'voice')
     }
     rec.onend = () => setListening(false)
-    rec.onerror = () => setListening(false)
+    rec.onerror = (e) => {
+      setListening(false)
+      if (e?.error && e.error !== 'no-speech' && e.error !== 'aborted') track('vm_error', { label: `Mic: ${e.error}` })
+    }
     recRef.current = rec
     setListening(true)
     rec.start()
   }
+
+  // what this browser can do with voice (once per visit)
+  useEffect(() => {
+    if (!Recognition) track('vm_voice', { label: 'No mic input in this browser' })
+    if (!canSpeak()) track('vm_voice', { label: 'No speech output in this browser' })
+  }, [])
+
+  // looks, camera views and glasses people try (not the starting values)
+  const firstPrefs = useRef(true)
+  useEffect(() => {
+    if (firstPrefs.current) {
+      firstPrefs.current = false
+      return
+    }
+    track('vm_action', { label: `Style · ${look} · ${view}${glasses ? ' · glasses' : ''}` })
+  }, [look, view, glasses])
 
   // keys: "/" focuses the box, Esc stops speaking
   useEffect(() => {
@@ -210,21 +235,37 @@ export const UI = ({ hidden }) => {
       {/* first visit: choose voice on/off (also unlocks audio on phones) */}
       {intro && (
         <div className='fixed inset-0 z-30 grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm'>
-          <div className={`${glass} w-full max-w-md rounded-3xl p-6 text-center sm:p-7`} style={{ animation: 'vm-in .5s ease-out' }}>
-            <div className='mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-violet-500 text-xl font-black text-slate-950 shadow-lg sm:h-16 sm:w-16 sm:text-2xl'>HF</div>
-            <h2 className='mt-4 text-xl font-black tracking-tight sm:text-2xl'>Meet my 3D twin</h2>
-            <p className='mt-2 text-sm text-white/70'>
-              Ask about my work in trading systems, backend and open source. Answers come from my portfolio; your browser does the talking.
+          <div className={`${glass} w-full max-w-md rounded-[28px] p-6 sm:p-8`} style={{ animation: 'vm-in .5s ease-out' }}>
+            <p className='flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-white/50'>
+              <span className='text-white'>00</span>
+              <span className='h-px w-10 bg-white/30' />
+              Virtual Me
             </p>
-            <div className='mt-6 grid gap-2 sm:grid-cols-2'>
-              <button onClick={() => closeIntro(true)} className='rounded-xl bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-300'>
+            <h2 className='mt-4 font-display text-[34px] font-semibold leading-[1.02] tracking-[-0.04em] sm:text-[40px]'>
+              <span className='text-white/40'>Talk to my</span>
+              <br />
+              3D twin.
+            </h2>
+            <p className='mt-3 text-[15px] leading-relaxed text-white/65'>
+              Ask about my work in trading systems, backend and open source, or what I do off the clock. Answers come from my portfolio; your browser does the talking.
+            </p>
+            <div className='mt-7 flex flex-wrap items-center gap-3'>
+              <button
+                onClick={() => closeIntro(true)}
+                className='group inline-flex items-center gap-3 rounded-full bg-white py-2.5 pl-5 pr-2.5 text-[15px] font-semibold text-slate-950 transition hover:-translate-y-0.5'
+              >
                 Start talking
+                <span className='grid h-8 w-8 place-items-center rounded-full bg-slate-950 text-white transition-transform group-hover:rotate-45'>
+                  <Ic.Send size={14} />
+                </span>
               </button>
-              <button onClick={() => closeIntro(false)} className='rounded-xl border border-white/20 px-4 py-3 font-semibold text-white/90 transition hover:bg-white/10'>
+              <button onClick={() => closeIntro(false)} className='rounded-full border border-white/20 px-5 py-3 text-[15px] font-semibold text-white/90 transition hover:bg-white/10'>
                 Captions only
               </button>
             </div>
-            <p className='mt-4 text-[11px] text-white/50'>Tip: tap the avatar, or say &ldquo;dance&rdquo;.</p>
+            <p className='mt-6 border-t border-white/10 pt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-white/45'>
+              Tip · tap me, or ask for a joke
+            </p>
           </div>
         </div>
       )}
@@ -240,16 +281,16 @@ export const UI = ({ hidden }) => {
         {/* ---------- header ---------- */}
         <div className='flex items-start justify-between gap-2'>
           <div className={`${glass} pointer-events-auto flex min-w-0 items-center gap-2.5 rounded-[20px] p-2 pr-3 sm:gap-3 sm:p-2.5 sm:pr-4`}>
-            <div className='relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 text-xs font-black text-slate-950 sm:h-11 sm:w-11 sm:text-sm'>
+            <div className='relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white font-display text-xs font-bold text-slate-950 sm:h-11 sm:w-11 sm:text-sm'>
               HF
               <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 ${busy || listening ? 'bg-amber-400' : 'bg-emerald-400'}`} />
             </div>
             <div className='min-w-0'>
-              <h1 className='truncate text-[14px] font-bold leading-tight tracking-tight sm:text-base'>{phone ? 'Harshana' : 'Harshana Fernando'}</h1>
+              <h1 className='truncate font-display text-[14px] font-semibold leading-tight tracking-tight sm:text-base'>{phone ? 'Harshana' : 'Harshana Fernando'}</h1>
               {!compact && <p className='text-[11px] text-white/60'>Software Engineer · Trading Systems</p>}
-              <p className='mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-cyan-200/90'>
-                {busy || listening ? <Bars on color={listening ? 'bg-rose-400' : loading ? 'bg-violet-300' : 'bg-cyan-300'} /> : <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />}
-                {status.toLowerCase()}
+              <p className='mt-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/55'>
+                {busy || listening ? <Bars on color={listening ? 'bg-rose-400' : loading ? 'bg-white/80' : 'bg-emerald-300'} /> : <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />}
+                {status}
               </p>
             </div>
             {!compact && (
@@ -326,10 +367,10 @@ export const UI = ({ hidden }) => {
                   className='group flex flex-col items-center gap-1'
                 >
                   <span
-                    className={`relative h-10 w-10 overflow-hidden rounded-xl border-2 transition ${look === l.id ? 'scale-105 border-cyan-300' : 'border-white/15 group-hover:border-white/40'}`}
+                    className={`relative h-10 w-10 overflow-hidden rounded-xl border-2 transition ${look === l.id ? 'scale-105 border-white' : 'border-white/15 group-hover:border-white/40'}`}
                     style={{ background: `linear-gradient(180deg, ${l.top} 0 58%, ${l.bottom} 58% 100%)` }}
                   />
-                  <span className={`text-[10px] ${look === l.id ? 'text-cyan-200' : 'text-white/60'}`}>{l.label}</span>
+                  <span className={`text-[10px] ${look === l.id ? 'text-white' : 'text-white/60'}`}>{l.label}</span>
                 </button>
               ))}
             </div>
@@ -337,7 +378,7 @@ export const UI = ({ hidden }) => {
               <span className='flex items-center gap-2'>
                 <Ic.Glasses /> Glasses
               </span>
-              <span className={`relative h-5 w-9 rounded-full transition ${glasses ? 'bg-cyan-400' : 'bg-white/20'}`}>
+              <span className={`relative h-5 w-9 rounded-full transition ${glasses ? 'bg-emerald-400' : 'bg-white/20'}`}>
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${glasses ? 'left-[18px]' : 'left-0.5'}`} />
               </span>
             </button>
@@ -367,13 +408,13 @@ export const UI = ({ hidden }) => {
             style={{ top: compact ? 64 : 84, maxHeight: compact ? '55dvh' : '55vh', animation: 'vm-in .25s ease-out' }}
           >
             <div className='mb-3 flex items-center justify-between'>
-              <p className='text-[11px] font-semibold uppercase tracking-widest text-white/50'>Conversation</p>
+              <p className='font-mono text-[11px] uppercase tracking-[0.2em] text-white/50'>Conversation</p>
               <button onClick={() => setPanel(null)} className='text-xs text-white/50 hover:text-white'>Close</button>
             </div>
             {log.length === 0 && <p className='text-white/60'>Nothing yet. Ask me something!</p>}
             {log.map((m, i) => (
               <div key={i} className={`mb-2 flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <span className={`max-w-[85%] rounded-2xl px-3 py-2 ${m.role === 'user' ? 'bg-cyan-500/25' : 'bg-white/10'}`}>{m.content}</span>
+                <span className={`max-w-[85%] rounded-2xl px-3 py-2 ${m.role === 'user' ? 'bg-white text-slate-900' : 'bg-white/10'}`}>{m.content}</span>
               </div>
             ))}
           </div>
@@ -386,7 +427,7 @@ export const UI = ({ hidden }) => {
             style={{ animation: 'vm-in .3s ease-out' }}
             aria-label='Actions and emotions'
           >
-            <p className='col-span-2 px-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/50'>Make me…</p>
+            <p className='col-span-2 px-1 pb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/50'>Make me…</p>
             {ACTIONS.map((a) => (
               <button
                 key={a.id}
@@ -395,8 +436,9 @@ export const UI = ({ hidden }) => {
                 title={a.label}
                 className='group flex w-[86px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-left text-xs font-medium text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40'
               >
-                <span className='text-base transition-transform group-hover:scale-125'>{a.emoji}</span>
-                {a.label}
+                <span className={`text-base transition-transform group-hover:scale-125 ${a.locked ? 'opacity-50 grayscale' : ''}`}>{a.emoji}</span>
+                <span className={a.locked ? 'text-white/45' : ''}>{a.label}</span>
+                {a.locked && <span aria-label='locked' className='ml-auto text-[10px] opacity-60'>🔒</span>}
               </button>
             ))}
           </div>
@@ -405,7 +447,7 @@ export const UI = ({ hidden }) => {
         {/* ---------- bottom dock ---------- */}
         <div className={`mx-auto flex w-full flex-col ${compact ? 'max-w-full gap-2' : 'max-w-2xl gap-3'}`}>
           {nudge && !busy && !compact && (
-            <button onClick={() => send(nudge)} className={`${glass} pointer-events-auto self-center rounded-full px-4 py-2 text-sm`} style={{ animation: 'vm-in .4s ease-out' }}>
+            <button onClick={() => send(nudge, 'nudge')} className={`${glass} pointer-events-auto self-center rounded-full px-4 py-2 text-sm`} style={{ animation: 'vm-in .4s ease-out' }}>
               <span className='text-white/60'>Psst… try </span>&ldquo;{nudge}&rdquo; →
             </button>
           )}
@@ -418,7 +460,7 @@ export const UI = ({ hidden }) => {
             >
               {loading && !message ? (
                 <span className='inline-flex items-center gap-2 text-sm text-white/80'>
-                  <Bars on color='bg-violet-300' /> Looking through my portfolio…
+                  <Bars on color='bg-white/80' /> Looking through my portfolio…
                 </span>
               ) : (
                 <Caption text={captionText} live={!!message} small={compact} />
@@ -436,8 +478,9 @@ export const UI = ({ hidden }) => {
                   disabled={loading}
                   className='glass flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-white disabled:opacity-40'
                 >
-                  <span>{a.emoji}</span>
-                  {a.label}
+                  <span className={a.locked ? 'opacity-50 grayscale' : ''}>{a.emoji}</span>
+                  <span className={a.locked ? 'text-white/45' : ''}>{a.label}</span>
+                  {a.locked && <span aria-label='locked' className='text-[10px] opacity-60'>🔒</span>}
                 </button>
               ))}
             </div>
@@ -467,8 +510,8 @@ export const UI = ({ hidden }) => {
                   {chips.map((q, i) => (
                     <button
                       key={q}
-                      onClick={() => send(q)}
-                      className='glass shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/90 transition hover:-translate-y-0.5 hover:text-white hover:shadow-[0_0_0_1px_rgba(34,211,238,0.45),0_12px_30px_-12px_rgba(34,211,238,0.5)]'
+                      onClick={() => send(q, 'topic')}
+                      className='glass shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/90 transition hover:-translate-y-0.5 hover:text-white hover:shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_12px_30px_-12px_rgba(16,185,129,0.45)]'
                       style={{ animation: `vm-in .3s ease-out ${i * 0.06}s both` }}
                     >
                       {q}
@@ -481,7 +524,7 @@ export const UI = ({ hidden }) => {
 
           {/* input */}
           <div
-            className={`${glass} glass-edge pointer-events-auto flex items-center gap-1.5 p-1.5 transition focus-within:shadow-[0_0_0_6px_rgba(34,211,238,0.10),0_24px_60px_-24px_rgba(0,0,0,0.85)] ${compact ? 'rounded-2xl' : 'rounded-[22px] p-2'}`}
+            className={`${glass} glass-edge pointer-events-auto flex items-center gap-1.5 p-1.5 transition focus-within:shadow-[0_0_0_6px_rgba(255,255,255,0.06),0_24px_60px_-24px_rgba(0,0,0,0.85)] ${compact ? 'rounded-2xl' : 'rounded-[22px] p-2'}`}
           >
             {Recognition && (
               <button
@@ -506,7 +549,7 @@ export const UI = ({ hidden }) => {
               }}
             />
             {message ? (
-              <button onClick={stop} className={`shrink-0 rounded-xl bg-white/15 font-semibold text-white hover:bg-white/25 ${compact ? 'h-10 px-3 text-sm' : 'h-12 px-5'}`}>
+              <button onClick={stop} className={`shrink-0 rounded-full bg-white/15 font-semibold text-white hover:bg-white/25 ${compact ? 'h-10 px-3 text-sm' : 'h-12 px-5'}`}>
                 <span className='flex items-center gap-1.5'>
                   <Ic.Stop size={14} /> Stop
                 </span>
@@ -516,17 +559,24 @@ export const UI = ({ hidden }) => {
                 disabled={busy}
                 onClick={() => send()}
                 aria-label='Ask'
-                className={`flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 font-semibold text-slate-950 shadow-[0_8px_30px_-8px_rgba(34,211,238,0.7)] transition hover:brightness-110 disabled:opacity-40 ${compact ? 'h-10 px-3' : 'h-12 rounded-2xl px-5'}`}
+                className={`group flex shrink-0 items-center gap-2 rounded-full bg-white font-semibold text-slate-950 transition hover:-translate-y-0.5 disabled:opacity-40 ${compact ? 'h-10 px-3' : 'h-12 pl-5 pr-1.5'}`}
               >
-                {!compact && 'Ask'} <Ic.Send size={16} />
+                {!compact && 'Ask'}
+                {compact ? (
+                  <Ic.Send size={16} />
+                ) : (
+                  <span className='grid h-9 w-9 place-items-center rounded-full bg-slate-950 text-white transition-transform group-hover:rotate-45'>
+                    <Ic.Send size={15} />
+                  </span>
+                )}
               </button>
             )}
           </div>
           {!short && (
-            <p className='pointer-events-auto truncate text-center text-[11px] text-white/55'>
-              {phone ? 'AI version of me, it can make mistakes. ' : 'An AI version of me, so it can make mistakes. Tap me for a reaction. '}
-              <a href={PORTFOLIO} target='_blank' rel='noreferrer' className='font-semibold text-white/85 underline'>
-                {phone ? 'Real portfolio' : 'Visit the real portfolio'}
+            <p className='pointer-events-auto truncate text-center font-mono text-[10px] uppercase tracking-[0.14em] text-white/45'>
+              {phone ? 'AI me · can be wrong · ' : 'An AI version of me · it can make mistakes · tap me for a reaction · '}
+              <a href={PORTFOLIO} target='_blank' rel='noreferrer' className='text-white/85 underline underline-offset-4'>
+                Real portfolio →
               </a>
             </p>
           )}
@@ -543,7 +593,7 @@ function IconBtn({ onClick, label, children, active, small }) {
       title={label}
       aria-label={label}
       aria-pressed={!!active}
-      className={`${glass} grid place-items-center text-white/80 transition hover:-translate-y-0.5 hover:text-white ${small ? 'h-10 w-10 rounded-xl' : 'h-11 min-w-[44px] rounded-2xl px-3'} ${active ? 'text-cyan-200 shadow-[0_0_0_1px_rgba(34,211,238,0.6),0_10px_30px_-10px_rgba(34,211,238,0.6)]' : ''}`}
+      className={`${glass} grid place-items-center text-white/80 transition hover:-translate-y-0.5 hover:text-white ${small ? 'h-10 w-10 rounded-xl' : 'h-11 min-w-[44px] rounded-2xl px-3'} ${active ? 'bg-white !text-slate-950' : ''}`}
     >
       <span className='flex items-center'>{children}</span>
     </button>

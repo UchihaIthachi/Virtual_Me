@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { speak, stopSpeaking, unlockSpeech } from '../lib/speech'
 import { localAnswer, poke as pokeLine } from '../lib/local'
+import { getIds, track } from '../lib/track'
 
 // Same origin on Netlify (/api/ask); `netlify dev` serves it locally too.
 const API = import.meta.env.VITE_API_URL || '/api/ask'
@@ -38,9 +39,11 @@ export const ChatProvider = ({ children }) => {
     setQueue((qq) => [...qq, m])
   }, [])
 
-  const chat = useCallback(async (text) => {
+  // how: 'text' (typed) | 'voice' (mic) | 'topic' (suggested question) | 'nudge'
+  const chat = useCallback(async (text, how = 'text') => {
     const q = String(text || '').trim()
     if (!q || busy.current) return
+    track('vm_ask', { label: how })
     unlockSpeech() // still inside the click/keypress, so mobile browsers allow audio
     setLastActive(Date.now())
     const local = localAnswer(q)
@@ -56,12 +59,14 @@ export const ChatProvider = ({ children }) => {
     try {
       const res = await fetch(API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // ids link this answer to the visit on the portfolio's /insights page
+        headers: { 'Content-Type': 'application/json', 'x-visitor-id': getIds().visitor, 'x-session-id': getIds().session },
         body: JSON.stringify({ message: q, history }),
       })
       const data = await res.json()
       ;(Array.isArray(data.messages) ? data.messages : []).forEach((m) => say(m))
-    } catch {
+    } catch (err) {
+      track('vm_error', { label: `ask failed: ${String(err?.message || err).slice(0, 80)}` })
       say({ text: "Sorry, I can't reach my brain right now. Please try again.", facialExpression: 'sad', animation: 'idle' })
     } finally {
       setLoading(false)

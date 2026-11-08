@@ -14,16 +14,30 @@ const POKES = [
   { text: 'Hey! That tickles.', facialExpression: 'laugh', animation: 'jump', gesture: 'laugh' },
   { text: "Careful, I'm still compiling.", facialExpression: 'funnyFace', animation: 'idle', gesture: 'shake' },
   { text: 'Yes, I can see your cursor.', facialExpression: 'confident', animation: 'idle', gesture: 'nod', wink: true },
-  { text: 'Okay okay, one dance move.', facialExpression: 'smile', animation: 'dance' },
+  { text: "No dancing, I'm on the clock.", facialExpression: 'funnyFace', animation: 'idle', gesture: 'shrug' },
   { text: "That's not a button. Well, it is now.", facialExpression: 'embarrassed', animation: 'idle', gesture: 'shrug' },
   { text: 'Hello again!', facialExpression: 'smile', animation: 'idle', gesture: 'wave' },
   { text: 'Personal space, please. I need at least one millisecond.', facialExpression: 'surprised', animation: 'idle', gesture: 'lean' },
 ]
 
+// Dance and kiss are locked: the avatar turns them down with a joke instead
+// (it represents me to recruiters; a dancing, kissing avatar is a bit much).
+const NOPE_DANCE = [
+  { text: "Dance? Not very manly of me, mate. The only moves I make are order moves.", facialExpression: 'funnyFace', animation: 'idle', gesture: 'shake' },
+  { text: "I don't dance. I deploy. Ask me about FIX instead.", facialExpression: 'confident', animation: 'idle', gesture: 'shrug' },
+  { text: "That one's locked. Engineers dance only when the build goes green, and only in private.", facialExpression: 'embarrassed', animation: 'idle', gesture: 'shrug' },
+]
+const NOPE_KISS = [
+  { text: "A kiss? Not very manly on a first meeting. Let's shake hands and talk trading systems.", facialExpression: 'embarrassed', animation: 'idle', gesture: 'shake' },
+  { text: "Easy there. A firm handshake is as far as I go.", facialExpression: 'funnyFace', animation: 'idle', gesture: 'shake' },
+  { text: "Locked, sorry. I save that for passing test suites.", facialExpression: 'confident', animation: 'idle', gesture: 'shrug' },
+]
+export const lockedLine = (id) => pick(id === 'kiss' ? NOPE_KISS : NOPE_DANCE)
+
 // The Actions bar: instant, no server call
 export const ACTIONS = [
   { id: 'wave', emoji: '👋', label: 'Wave', m: { text: 'Hi there!', facialExpression: 'smile', animation: 'idle', gesture: 'wave' } },
-  { id: 'dance', emoji: '💃', label: 'Dance', m: { text: "Here's my deploy-went-green dance.", facialExpression: 'smile', animation: 'dance' } },
+  { id: 'dance', emoji: '💃', label: 'Dance', locked: true, m: NOPE_DANCE[0] },
   { id: 'nod', emoji: '👍', label: 'Nod', m: { text: 'Absolutely.', facialExpression: 'confident', animation: 'idle', gesture: 'nod' } },
   { id: 'shake', emoji: '🙅', label: 'No', m: { text: 'Nope, not merging that on a Friday.', facialExpression: 'curious', animation: 'idle', gesture: 'shake' } },
   { id: 'think', emoji: '🤔', label: 'Think', m: { text: 'Hmm, let me think about the latency budget.', facialExpression: 'thinking', animation: 'idle', gesture: 'think' } },
@@ -31,7 +45,7 @@ export const ACTIONS = [
   { id: 'laugh', emoji: '😂', label: 'Laugh', m: { text: 'Ha! Good one.', facialExpression: 'laugh', animation: 'happy', gesture: 'laugh' } },
   { id: 'bow', emoji: '🙇', label: 'Bow', m: { text: 'Thank you for visiting.', facialExpression: 'smile', animation: 'idle', gesture: 'bow' } },
   { id: 'wink', emoji: '😉', label: 'Wink', m: { text: 'Between us: I love a clean commit history.', facialExpression: 'confident', animation: 'idle', wink: true } },
-  { id: 'kiss', emoji: '😘', label: 'Kiss', m: { text: 'Mwah! Thanks for stopping by.', facialExpression: 'love', animation: 'kiss' } },
+  { id: 'kiss', emoji: '😘', label: 'Kiss', locked: true, m: NOPE_KISS[0] },
   { id: 'jump', emoji: '🦘', label: 'Jump', m: { text: 'Whee!', facialExpression: 'surprised', animation: 'jump' } },
   { id: 'look', emoji: '👀', label: 'Look', m: { text: 'Nice place you have here.', facialExpression: 'curious', animation: 'idle', gesture: 'lookAround' } },
   { id: 'sad', emoji: '😢', label: 'Sad', m: { text: 'That feeling when the build fails at 99 percent.', facialExpression: 'sad', animation: 'sad' } },
@@ -51,12 +65,12 @@ export function localAnswer(q) {
   const t = q.toLowerCase()
   const act = (id) => ACTIONS.find((a) => a.id === id).m
   if (t.length < 40) {
-    if (/\b(dance|show me a move|bust a move)\b/.test(t)) return act('dance')
+    if (/\b(dance|dancing|show me a move|bust a move)\b/.test(t)) return lockedLine('dance')
     if (/\b(jump|hop)\b/.test(t)) return { ...act('jump'), text: 'Like this?' }
     if (/\bwave\b/.test(t)) return act('wave')
     if (/\b(bow|thank(s| you))\b/.test(t)) return act('bow')
     if (/\b(wink)\b/.test(t)) return act('wink')
-    if (/\b(kiss|love you)\b/.test(t)) return act('kiss')
+    if (/\b(kiss|love you)\b/.test(t)) return lockedLine('kiss')
     if (/\b(shrug)\b/.test(t)) return act('shrug')
     if (/\b(laugh|lol|haha)\b/.test(t)) return act('laugh')
     if (/\b(nod|say yes)\b/.test(t)) return act('nod')

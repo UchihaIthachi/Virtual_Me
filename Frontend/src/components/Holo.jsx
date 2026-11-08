@@ -38,9 +38,9 @@ function frame(ctx, w, h, title, status) {
   ctx.roundRect(3, 3, w - 6, h - 6, 22)
   ctx.fill()
   const edge = ctx.createLinearGradient(0, 0, w, h)
-  edge.addColorStop(0, 'rgba(165,243,252,0.85)')
+  edge.addColorStop(0, 'rgba(255,255,255,0.7)')
   edge.addColorStop(0.5, 'rgba(255,255,255,0.18)')
-  edge.addColorStop(1, 'rgba(196,181,253,0.7)')
+  edge.addColorStop(1, 'rgba(52,211,153,0.6)')
   ctx.strokeStyle = edge
   ctx.lineWidth = 2
   ctx.stroke()
@@ -48,7 +48,7 @@ function frame(ctx, w, h, title, status) {
   ctx.fillStyle = 'rgba(255,255,255,0.85)'
   ctx.fillText(title, 24, 40)
   ctx.textAlign = 'right'
-  ctx.fillStyle = '#5eead4'
+  ctx.fillStyle = '#34d399'
   ctx.fillText(status, w - 24, 40)
   ctx.textAlign = 'left'
   ctx.fillStyle = 'rgba(255,255,255,0.12)'
@@ -99,7 +99,7 @@ function ChartPanel(props) {
     })
     // last price line
     ctx.setLineDash([6, 6])
-    ctx.strokeStyle = 'rgba(56,189,248,0.8)'
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'
     ctx.beginPath()
     ctx.moveTo(24, y(n))
     ctx.lineTo(W - 24, y(n))
@@ -116,12 +116,12 @@ function ChartPanel(props) {
 }
 
 const FIX = [
-  ['→', '35=D 11=ORD-1042 55=DEMO.N0000 54=1 38=500 44=196.50', '#7dd3fc'],
-  ['←', '35=8 150=0 39=0 11=ORD-1042 NEW', '#a3e635'],
-  ['←', 'MITCH A side=B qty=1,200 px=74.20', '#c4b5fd'],
-  ['←', '35=8 150=F 39=2 32=500 31=196.50 FILLED', '#a3e635'],
-  ['→', '35=F 41=ORD-1043 11=CXL-0007', '#7dd3fc'],
-  ['←', 'MITCH P qty=300 px=74.10', '#c4b5fd'],
+  ['→', '35=D 11=ORD-1042 55=DEMO.N0000 54=1 38=500 44=196.50', '#e2e8f0'],
+  ['←', '35=8 150=0 39=0 11=ORD-1042 NEW', '#34d399'],
+  ['←', 'MITCH A side=B qty=1,200 px=74.20', '#94a3b8'],
+  ['←', '35=8 150=F 39=2 32=500 31=196.50 FILLED', '#34d399'],
+  ['→', '35=F 41=ORD-1043 11=CXL-0007', '#e2e8f0'],
+  ['←', 'MITCH P qty=300 px=74.10', '#94a3b8'],
   ['↔', '35=0 heartbeat', '#94a3b8'],
 ]
 
@@ -151,7 +151,7 @@ function TerminalPanel(props) {
     ctx.globalAlpha = 1
     // blinking cursor
     if (Math.floor(t) % 2) {
-      ctx.fillStyle = '#a3e635'
+      ctx.fillStyle = '#34d399'
       ctx.fillRect(22, 86 + lines.current.length * 29 - 14, 10, 18)
     }
     tex.needsUpdate = true
@@ -185,7 +185,7 @@ function Badges() {
       x.beginPath()
       x.roundRect(4, 4, 120, 120, 32)
       x.fill()
-      x.strokeStyle = 'rgba(165,243,252,0.55)'
+      x.strokeStyle = 'rgba(255,255,255,0.4)'
       x.lineWidth = 2.5
       x.stroke()
       if (it.path) {

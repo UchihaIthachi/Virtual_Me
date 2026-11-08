@@ -49,11 +49,14 @@ function mood(question, answer) {
   return m("confident", "idle", "nod");
 }
 
-async function askPortfolio(message, history, clientIp) {
+async function askPortfolio(message, history, clientIp, ids = {}) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
     const headers = { "content-type": "application/json" };
+    // the visitor's anonymous ids, so the portfolio's /insights links answers to visits
+    if (ids.visitor) headers["x-visitor-id"] = ids.visitor;
+    if (ids.session) headers["x-session-id"] = ids.session;
     if (process.env.CHAT_PARTNER_TOKEN) {
       headers["x-chat-partner"] = process.env.CHAT_PARTNER_TOKEN;
       headers["x-client-ip"] = clientIp;
@@ -118,7 +121,9 @@ export default async (req, context) => {
 
   try {
     const ip = context?.ip || req.headers.get("x-nf-client-connection-ip") || "";
-    const raw = await askPortfolio(message, history, ip);
+    const clean = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+    const ids = { visitor: clean(req.headers.get("x-visitor-id")), session: clean(req.headers.get("x-session-id")) };
+    const raw = await askPortfolio(message, history, ip, ids);
     const text = speakable(raw) || "Sorry, I didn't catch that. Could you ask again?";
     return json({ messages: [{ text, ...mood(message, text) }] });
   } catch (err) {

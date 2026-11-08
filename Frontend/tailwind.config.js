@@ -4,7 +4,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
+        // same type as the portfolio: Work Sans for text, Poppins for headings
+        sans: ["Work Sans", "Inter", "system-ui", "sans-serif"],
+        display: ["Poppins", "Work Sans", "sans-serif"],
       },
     },
   },
