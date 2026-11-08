@@ -127,7 +127,7 @@ const VIEWS = {
 
 export const Experience = () => {
   const cameraControls = useRef();
-  const { view = "face", message } = useChat();
+  const { view = "face", message, P } = useChat();
   // step back for big moves so the whole dance / jump is in frame
   const bigMove = !!message && ["dance", "jump"].includes(message.animation);
   const current = bigMove ? "full" : view;
@@ -178,7 +178,8 @@ export const Experience = () => {
       />
       <Sparkles count={24} scale={[4, 3, 2.5]} position={[0, 1.5, -0.8]} size={1.3} speed={0.2} opacity={0.35} color="#f8fafc" />
       <Stage />
-      <Avatar />
+      {/* key: a new persona mounts its own model cleanly */}
+      <Avatar key={P.id} model={P.model} />
       <Holo />
       <ContactShadows opacity={0.7} blur={2.4} far={2} />
     </>

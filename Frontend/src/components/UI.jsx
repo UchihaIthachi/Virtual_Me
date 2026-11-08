@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat'
 import { canSpeak, isMuted, setMuted, spokenChar, unlockSpeech } from '../lib/speech'
-import { ACTIONS, GREETING, TOPICS, lockedLine } from '../lib/local'
+import { ACTIONS, greetingFor, topicsFor, lockedLine, vmBusy } from '../lib/local'
+import { VIRTUAL_ME_READY } from '../lib/persona'
 import { LOOKS } from '../lib/looks'
 import * as Ic from './Icons'
 import { track } from '../lib/track'
@@ -93,7 +94,8 @@ function Bars({ on, color = 'bg-emerald-300' }) {
 
 export const UI = ({ hidden }) => {
   const input = useRef()
-  const { chat, say, loading, message, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView } = useChat()
+  const { chat, say, loading, message, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView, persona, setPersona, P } = useChat()
+  const TOPICS = topicsFor(persona)
   const [mute, setMute] = useState(isMuted())
   const [panel, setPanel] = useState(null) // 'style' | 'log' | null
   const togglePanel = (p) => setPanel((v) => (v === p ? null : p))
@@ -134,7 +136,7 @@ export const UI = ({ hidden }) => {
     setMuted(!withVoice)
     setMute(!withVoice)
     if (withVoice) unlockSpeech()
-    say(GREETING, { record: true })
+    say(greetingFor(persona), { record: true })
   }
 
   // emotes: instant, interrupt whatever is playing
@@ -144,7 +146,7 @@ export const UI = ({ hidden }) => {
     unlockSpeech()
     stop()
     setNudge(null)
-    setTimeout(() => say(a.locked ? lockedLine(a.id) : a.m, { record: false }), 30)
+    setTimeout(() => say(a.locked ? lockedLine(a.id, persona) : a.m, { record: false }), 30)
   }
 
   // voice input (Chrome, Edge, Safari)
@@ -239,15 +241,15 @@ export const UI = ({ hidden }) => {
             <p className='flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-white/50'>
               <span className='text-white'>00</span>
               <span className='h-px w-10 bg-white/30' />
-              Virtual Me
+              {P.eyebrow}
             </p>
             <h2 className='mt-4 font-display text-[34px] font-semibold leading-[1.02] tracking-[-0.04em] sm:text-[40px]'>
-              <span className='text-white/40'>Talk to my</span>
+              <span className='text-white/40'>{P.introA}</span>
               <br />
-              3D twin.
+              {P.introB}
             </h2>
             <p className='mt-3 text-[15px] leading-relaxed text-white/65'>
-              Ask about my work in trading systems, backend and open source, or what I do off the clock. Answers come from my portfolio; your browser does the talking.
+              {P.intro}
             </p>
             <div className='mt-7 flex flex-wrap items-center gap-3'>
               <button
@@ -286,8 +288,8 @@ export const UI = ({ hidden }) => {
               <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 ${busy || listening ? 'bg-amber-400' : 'bg-emerald-400'}`} />
             </div>
             <div className='min-w-0'>
-              <h1 className='truncate font-display text-[14px] font-semibold leading-tight tracking-tight sm:text-base'>{phone ? 'Harshana' : 'Harshana Fernando'}</h1>
-              {!compact && <p className='text-[11px] text-white/60'>Software Engineer · Trading Systems</p>}
+              <h1 className='truncate font-display text-[14px] font-semibold leading-tight tracking-tight sm:text-base'>{phone ? P.short : P.name}</h1>
+              {!compact && <p className='text-[11px] text-white/60'>{P.role}</p>}
               <p className='mt-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/55'>
                 {busy || listening ? <Bars on color={listening ? 'bg-rose-400' : loading ? 'bg-white/80' : 'bg-emerald-300'} /> : <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />}
                 {status}
@@ -305,6 +307,49 @@ export const UI = ({ hidden }) => {
           </div>
 
           <div className='pointer-events-auto flex shrink-0 items-center gap-1.5 sm:gap-2'>
+            {/* "Virtual Me" (his look-alike): a joke until the model exists (lib/persona.js), then a real switch */}
+            {VIRTUAL_ME_READY ? (
+              <div className={`${glass} flex rounded-full p-1`} role='tablist' aria-label='Who you talk to'>
+                {[
+                  ['assistant', compact ? 'Assistant' : 'His assistant'],
+                  ['me', 'Virtual Me'],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    role='tab'
+                    aria-selected={persona === id}
+                    disabled={busy}
+                    onClick={() => {
+                      if (persona === id) return
+                      stop()
+                      setPersona(id)
+                      setTimeout(() => say(greetingFor(id), { record: true }), 600)
+                    }}
+                    className={`rounded-full px-3 font-semibold transition disabled:opacity-50 ${compact ? 'py-1.5 text-[11px]' : 'py-2 text-xs'} ${persona === id ? 'bg-white text-slate-900' : 'text-white/70 hover:text-white'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  if (loading) return
+                  track('vm_action', { label: 'Virtual Me (unavailable)' })
+                  unlockSpeech()
+                  stop()
+                  setNudge(null)
+                  setTimeout(() => say(vmBusy(), { record: false }), 30)
+                }}
+                title='Virtual Me: not available yet'
+                aria-label='Virtual Me, not available yet'
+                className={`${glass} flex items-center gap-1.5 rounded-full text-white/70 transition hover:text-white ${compact ? 'h-10 px-3 text-[11px]' : 'h-11 px-4 text-xs'}`}
+              >
+                <span className='h-1.5 w-1.5 rounded-full bg-amber-400' />
+                <span className='font-semibold'>Virtual Me</span>
+                {!phone && <span className='font-mono text-[10px] uppercase tracking-[0.14em] text-white/45'>away</span>}
+              </button>
+            )}
             {!compact && (
               <div className={`${glass} hidden rounded-2xl p-1 lg:flex`} role='tablist' aria-label='Camera'>
                 {VIEWS.map((v) => (
@@ -541,7 +586,7 @@ export const UI = ({ hidden }) => {
             <input
               ref={input}
               className={`w-full min-w-0 bg-transparent px-2 text-white outline-none placeholder:text-white/45 ${compact ? 'h-10 text-[15px]' : 'h-12'}`}
-              placeholder={listening ? 'Listening…' : compact ? 'Ask me anything…' : 'Ask me anything about my work…  ( / )'}
+              placeholder={listening ? 'Listening…' : compact ? P.placeholderShort : P.placeholder}
               maxLength={500}
               enterKeyHint='send'
               onKeyDown={(e) => {
@@ -574,7 +619,7 @@ export const UI = ({ hidden }) => {
           </div>
           {!short && (
             <p className='pointer-events-auto truncate text-center font-mono text-[10px] uppercase tracking-[0.14em] text-white/45'>
-              {phone ? 'AI me · can be wrong · ' : 'An AI version of me · it can make mistakes · tap me for a reaction · '}
+              {phone ? P.footerShort : P.footer}
               <a href={PORTFOLIO} target='_blank' rel='noreferrer' className='text-white/85 underline underline-offset-4'>
                 Real portfolio →
               </a>

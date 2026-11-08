@@ -2,7 +2,8 @@
 //
 // Answers come from the portfolio's chat (/api/chat), which only uses facts
 // from the portfolio's own content (RAG). We ask it in "voice" mode so it
-// replies in the first person, short and without markdown, then pick a facial
+// replies as Harshana's personal assistant (talking about him in the third
+// person: the avatar doesn't look like him), short and without markdown, then pick a facial
 // expression and animation for the avatar. The browser speaks the text.
 //
 // Env (Netlify → Site configuration → Environment variables):
@@ -49,7 +50,7 @@ function mood(question, answer) {
   return m("confident", "idle", "nod");
 }
 
-async function askPortfolio(message, history, clientIp, ids = {}) {
+async function askPortfolio(message, history, clientIp, ids = {}, persona = "assistant") {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
@@ -65,7 +66,7 @@ async function askPortfolio(message, history, clientIp, ids = {}) {
       method: "POST",
       signal: ac.signal,
       headers,
-      body: JSON.stringify({ message, history, voice: true, page: { path: "/virtual-me", label: "the Virtual Me 3D avatar" } }),
+      body: JSON.stringify({ message, history, voice: persona === "me" ? true : "assistant", page: { path: "/virtual-me", label: persona === "me" ? "Virtual Me, Harshana's 3D twin" : "Harshana's 3D assistant" } }),
     });
     if (!res.ok || !res.body) throw new Error(`portfolio ${res.status}`);
     // NDJSON stream: {t:"sources"} {t:"delta",v} ... {t:"done"}
@@ -110,7 +111,7 @@ export default async (req, context) => {
   }
   const message = String(body?.message || "").trim().slice(0, MAX_INPUT);
   if (!message) {
-    return json({ messages: [{ text: "Hi! I'm Harshana's digital twin. Ask me about my work, trading systems or open source.", facialExpression: "smile", animation: "happy" }] });
+    return json({ messages: [{ text: "Hi! I'm Harshana's assistant. Ask me about his work, trading systems, open source, or his life off the clock.", facialExpression: "smile", animation: "happy" }] });
   }
   const history = Array.isArray(body?.history)
     ? body.history
@@ -123,7 +124,9 @@ export default async (req, context) => {
     const ip = context?.ip || req.headers.get("x-nf-client-connection-ip") || "";
     const clean = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
     const ids = { visitor: clean(req.headers.get("x-visitor-id")), session: clean(req.headers.get("x-session-id")) };
-    const raw = await askPortfolio(message, history, ip, ids);
+    // "me" (Virtual Me, first person) only once it is switched on for this site (VITE_VIRTUAL_ME=1)
+    const persona = body?.persona === "me" && process.env.VITE_VIRTUAL_ME === "1" ? "me" : "assistant";
+    const raw = await askPortfolio(message, history, ip, ids, persona);
     const text = speakable(raw) || "Sorry, I didn't catch that. Could you ask again?";
     return json({ messages: [{ text, ...mood(message, text) }] });
   } catch (err) {

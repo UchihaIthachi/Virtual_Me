@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { speak, stopSpeaking, unlockSpeech } from '../lib/speech'
 import { localAnswer, poke as pokeLine } from '../lib/local'
 import { getIds, track } from '../lib/track'
+import { PERSONAS, VIRTUAL_ME_READY, readPersona, savePersona } from '../lib/persona'
 
 // Same origin on Netlify (/api/ask); `netlify dev` serves it locally too.
 const API = import.meta.env.VITE_API_URL || '/api/ask'
@@ -25,6 +26,14 @@ export const ChatProvider = ({ children }) => {
     }
   })
   const [glasses, setGlasses] = useState(true)
+  // who is talking: Harshana's assistant, or (once his model exists) Virtual Me
+  const [persona, setPersonaState] = useState(readPersona)
+  const setPersona = useCallback((id) => {
+    const next = id === 'me' && VIRTUAL_ME_READY ? 'me' : 'assistant'
+    setPersonaState(next)
+    savePersona(next)
+    track('vm_action', { label: `Persona · ${next}` })
+  }, [])
   const setLook = useCallback((id) => {
     setLookState(id)
     try {
@@ -46,7 +55,7 @@ export const ChatProvider = ({ children }) => {
     track('vm_ask', { label: how })
     unlockSpeech() // still inside the click/keypress, so mobile browsers allow audio
     setLastActive(Date.now())
-    const local = localAnswer(q)
+    const local = localAnswer(q, persona)
     if (local) {
       setLog((l) => [...l, { role: 'user', content: q }])
       say(local)
@@ -61,7 +70,7 @@ export const ChatProvider = ({ children }) => {
         method: 'POST',
         // ids link this answer to the visit on the portfolio's /insights page
         headers: { 'Content-Type': 'application/json', 'x-visitor-id': getIds().visitor, 'x-session-id': getIds().session },
-        body: JSON.stringify({ message: q, history }),
+        body: JSON.stringify({ message: q, history, persona }),
       })
       const data = await res.json()
       ;(Array.isArray(data.messages) ? data.messages : []).forEach((m) => say(m))
@@ -73,7 +82,7 @@ export const ChatProvider = ({ children }) => {
       busy.current = false
       setLastActive(Date.now())
     }
-  }, [log, say])
+  }, [log, say, persona])
 
   // tapping the avatar
   const poke = useCallback(() => {
@@ -102,7 +111,7 @@ export const ChatProvider = ({ children }) => {
   }, [])
 
   return (
-    <ChatContext.Provider value={{ chat, say, poke, message, loading, cameraZoomed, setCameraZoomed, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView }}>
+    <ChatContext.Provider value={{ chat, say, poke, message, loading, cameraZoomed, setCameraZoomed, log, stop, lastActive, look, setLook, glasses, setGlasses, view, setView, persona, setPersona, P: PERSONAS[persona] }}>
       {children}
     </ChatContext.Provider>
   )

@@ -167,8 +167,9 @@ const MOUTH = /^(mouth|jaw|cheekPuff|tongue)/
 
 let setupMode = false
 
-export function Avatar(props) {
-  const { nodes, materials, scene } = useGLTF('/models/me.glb', DRACO)
+export function Avatar({ model = '/models/me.glb', ...props }) {
+  // the persona's model (see lib/persona.js); same rig for every persona
+  const { nodes, materials, scene } = useGLTF(model, DRACO)
   const MORPH_KEYS = useMemo(() => Object.keys(nodes.EyeLeft.morphTargetDictionary).concat(Object.keys(nodes.Wolf3D_Head.morphTargetDictionary)).filter((k, i, a) => a.indexOf(k) === i), [nodes])
 
   const { message, loading, poke, look: lookId, glasses } = useChat()
